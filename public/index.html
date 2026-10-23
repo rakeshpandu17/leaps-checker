@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>LEAPS Go/No-Go</title>
+<meta name="description" content="Type a ticker and get a LEAPS call go / wait / no-go check, scored on eight rules with live delayed data.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232f55c9'/%3E%3Cpath d='M7 22l6-7 5 4 7-9' stroke='white' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Source+Sans+3:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <span class="eyebrow">Long-dated call options</span>
+    <h1>LEAPS Go/No-Go</h1>
+    <p class="lede">Type a stock or ETF ticker. The checker pulls the price, the LEAPS option chain, the earnings date and basic company data, picks the best-fitting deep in-the-money call, and scores it on the eight checklist rules.</p>
+  </header>
+
+  <form class="ticket" id="form" autocomplete="off">
+    <div class="field grow">
+      <label for="ticker">Ticker</label>
+      <input id="ticker" name="ticker" placeholder="SOFI" maxlength="10" autocapitalize="characters" spellcheck="false" required>
+    </div>
+    <div class="field">
+      <label for="portfolio">Portfolio value ($, optional)</label>
+      <input id="portfolio" inputmode="decimal" placeholder="25000">
+    </div>
+    <div class="field small">
+      <label for="contracts">Contracts</label>
+      <input id="contracts" inputmode="numeric" value="1">
+    </div>
+    <button type="submit" class="primary" id="go">Analyze</button>
+    <div class="quick" id="quick">Try:
+      <button type="button" data-t="SOFI">SOFI</button>
+      <button type="button" data-t="AAPL">AAPL</button>
+      <button type="button" data-t="NVDA">NVDA</button>
+      <button type="button" data-t="SPY">SPY</button>
+    </div>
+  </form>
+
+  <section id="status" class="status" aria-live="polite"></section>
+
+  <section id="result" hidden>
+    <div class="verdict" id="verdict">
+      <div class="verdict-head">
+        <span class="badge" id="vBadge"></span>
+        <div>
+          <h2 id="vHead"></h2>
+          <p class="sub" id="vSub"></p>
+        </div>
+      </div>
+      <ul class="reasons" id="vReasons"></ul>
+    </div>
+
+    <div class="grid2">
+      <article class="card" id="bestCard">
+        <span class="eyebrow">Best-fitting contract</span>
+        <h3 id="bestTitle"></h3>
+        <dl class="kv" id="bestKv"></dl>
+      </article>
+      <article class="card" id="stockCard">
+        <span class="eyebrow">The stock</span>
+        <h3 id="stockTitle"></h3>
+        <dl class="kv" id="stockKv"></dl>
+        <div class="override">
+          <label for="earn">Earnings date override</label>
+          <input type="date" id="earn">
+        </div>
+      </article>
+    </div>
+
+    <section class="checks" id="checks" aria-label="The eight checks"></section>
+
+    <section class="card" id="altCard">
+      <span class="eyebrow">Other contracts that qualify</span>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Expiry</th><th>Strike</th><th>Mid</th><th>Delta</th><th>Break-even</th><th>Time cost / yr</th><th>Spread</th><th>OI</th></tr></thead>
+          <tbody id="altBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <p class="notes" id="notes"></p>
+  </section>
+
+  <footer class="foot">
+    <p class="caveat"><strong>Educational, not financial advice.</strong> No options strategy is guaranteed safe. A LEAPS call can lose its whole premium. Check the live quote with your broker before you trade.</p>
+    <p>Data: Cboe delayed quotes (about 15 minutes late) for price, option chain, Greeks and history; Yahoo Finance and Nasdaq for earnings dates and company figures. Free sources have no IV history, so the IV check compares today's implied volatility with the stock's own realized volatility as an estimate of IV rank.</p>
+  </footer>
+</div>
+<script type="module" src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+{
+  "name": "leaps-checker",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "dev": "npx wrangler pages dev public"
+  }
+}
