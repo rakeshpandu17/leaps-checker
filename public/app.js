@@ -1,5 +1,6 @@
 import { analyze, daysBetween } from "./scoring.js";
 import { UNIVERSE, NAMES } from "./universe.js";
+import { fromSnapshot, SNAPSHOT_MAX_AGE_DAYS } from "./snapshot.js";
 
 const $ = (id) => document.getElementById(id);
 const PREFS = "leaps-go-prefs-v1";
@@ -466,6 +467,32 @@ async function screen(force = false) {
   const status = (t) => { if (id === screenRun) $("ideasStatus").textContent = t; };
   const progress = (f) => { if (id === screenRun) { $("ideasProgress").hidden = f >= 1; $("ideasBar").style.width = Math.round(f * 100) + "%"; } };
   progress(0);
+
+  // Preferred: last night's scan of ~330 stocks, ranked instantly in the browser.
+  status("Loading last night's scan…");
+  const snap = await loadSnapshot(force);
+  if (id !== screenRun) return;
+  if (snap) {
+    const today = new Date().toISOString().slice(0, 10);
+    const ideas = [];
+    for (const [t, s] of Object.entries(snap.stocks)) {
+      // A 0.75-delta LEAPS usually costs at least about a quarter of the share price per share.
+      if (s.price * 100 * 0.22 > budget) continue;
+      const d = fromSnapshot(t, s, today);
+      const a = analyze(d, { ...settings(), maxCost: budget, contracts: 1 });
+      if (!a.best || a.verdict.level === "nogo" || !a.projection) continue;
+      ideas.push({ t, d, a });
+    }
+    renderIdeas(ideas, pv);
+    progress(1);
+    const when = new Date(snap.generatedAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+    status(ideas.length
+      ? `${Math.min(ideas.length, IDEA_LIMIT)} best of ${ideas.length} that fit, from ${snap.count} stocks and ETFs scanned at the close (${when}). Click a row for a live check.`
+      : `None of the ${snap.count} stocks scanned at the close (${when}) has a LEAPS call that passes the checks and fits ${fmt0(budget)}. Try a larger portfolio value.`);
+    return;
+  }
+
+  // Fallback: live scan of the shorter built-in list.
   status("Getting prices…");
 
   // 1. Prices first, to skip stocks whose deep in-the-money calls can't fit the budget.
@@ -507,6 +534,21 @@ async function screen(force = false) {
   status(ideas.length
     ? `${Math.min(ideas.length, IDEA_LIMIT)} idea${ideas.length === 1 ? "" : "s"} from ${affordable.length} checked. Prices are about 15 minutes delayed.`
     : `None of the ${affordable.length} affordable names passed the checks right now. Try a larger portfolio value.`);
+}
+
+let snapshotPromise = null;
+function loadSnapshot(force) {
+  if (force || !snapshotPromise) {
+    snapshotPromise = fetch("/data/scan.json", { cache: "no-cache" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (!j || !j.stocks || !j.generatedAt) return null;
+        const ageDays = (Date.now() - Date.parse(j.generatedAt)) / 86400000;
+        return ageDays <= SNAPSHOT_MAX_AGE_DAYS ? j : null;
+      })
+      .catch(() => null);
+  }
+  return snapshotPromise;
 }
 
 function renderIdeas(ideas, pv) {

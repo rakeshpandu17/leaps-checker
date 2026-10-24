@@ -38,3 +38,11 @@ Works as either a Cloudflare Worker (uses `wrangler.jsonc` + `src/worker.js`) or
     npm test                     # offline tests with fixture data
     node test/serve-mock.mjs     # local preview at http://localhost:8788 using fixture data
     npx wrangler pages dev public  # local preview against live data
+
+## Nightly scan
+
+`.github/workflows/nightly-scan.yml` runs `scripts/nightly-scan.mjs` each weekday at 22:30 UTC (after the US close).
+It fetches data for about 330 tickers in `scripts/scan-universe.mjs` and commits a compact snapshot to
+`public/data/scan.json`; the push redeploys the site. The "LEAPS ideas" list ranks that snapshot in the browser
+(falling back to a live scan of `public/universe.js` if the snapshot is missing or over 5 days old).
+Run it any time from GitHub → Actions → Nightly LEAPS scan → Run workflow.

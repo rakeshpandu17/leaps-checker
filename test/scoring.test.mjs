@@ -114,3 +114,16 @@ test("ticker search keeps US stocks, ETFs and indexes", async () => {
   assert.equal(r.results[0].name, "SoFi Technologies, Inc.");
   assert.equal(r.results[0].type, "Stock");
 });
+
+test("nightly scan snapshot round-trips to the same contract", async () => {
+  const { scan } = await import("../scripts/nightly-scan.mjs");
+  const { fromSnapshot } = await import("../public/snapshot.js");
+  const snap = await scan(["SOFI"], { fetchFn: mockFetch({ options: () => chain() }), now, log: () => {} });
+  assert.equal(snap.count, 1);
+  const live = await get();
+  const d = fromSnapshot("SOFI", JSON.parse(JSON.stringify(snap.stocks.SOFI)), TODAY);
+  const a1 = analyze(live, { maxCost: 600 }), a2 = analyze(d, { maxCost: 600 });
+  assert.equal(a2.best.symbol, a1.best.symbol);
+  assert.equal(a2.verdict.level, a1.verdict.level);
+  assert.ok(JSON.stringify(snap).length < 40000, "snapshot per stock stays small");
+});
