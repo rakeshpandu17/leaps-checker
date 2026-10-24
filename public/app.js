@@ -1,4 +1,4 @@
-import { analyze } from "./scoring.js";
+import { analyze, daysBetween } from "./scoring.js";
 import { UNIVERSE } from "./universe.js";
 
 const $ = (id) => document.getElementById(id);
@@ -185,26 +185,50 @@ function render() {
   $("stockTitle").textContent = f.name ? `${f.name} (${data.ticker})` : data.ticker;
   const sk = $("stockKv");
   sk.replaceChildren();
-  const srow = (k, val, note) =>
-    val != null && sk.append(el("dt", {}, k), el("dd", {}, el("span", { class: "v" }, val), note ? el("span", { class: "n" }, note) : null));
-  srow("Price", fmt$(data.price));
+  const srow = (k, val, tip, note) =>
+    val != null && sk.append(label(k, tip), el("dd", {}, el("span", { class: "v" }, val), note ? el("span", { class: "n" }, note) : null));
+  const S = data.price;
+  const vs = (x) => (x ? `${fmtPct((S / x - 1) * 100)} ${S >= x ? "above" : "below"}`.replace(/^\+|^-/, "") : null);
+  srow("Price", fmt$(S),
+    `The latest ${data.ticker} share price, about 15 minutes delayed.` + (data.changePct != null ? ` It is ${fmtPct(data.changePct, 2)} today.` : ""),
+    data.changePct != null ? `${fmtPct(data.changePct, 2)} today` : null);
   const t = a.trend;
   if (t) {
-    srow("50-day avg", t.sma50 != null ? fmt$(t.sma50) : null);
-    srow("200-day avg", t.sma200 != null ? fmt$(t.sma200) : null);
-    srow("52-week range", `${fmt$(t.low52)} – ${fmt$(t.high52)}`);
-    srow("1-year return", t.ret1y != null ? fmtPct(t.ret1y) : null);
+    if (t.sma50 != null) srow("50-day avg", fmt$(t.sma50),
+      `The average closing price over the last 50 trading days (about 2.5 months). A price above it suggests a short-term uptrend; below it, a short-term downtrend.`,
+      vs(t.sma50));
+    if (t.sma200 != null) srow("200-day avg", fmt$(t.sma200),
+      `The average closing price over the last 200 trading days (about 10 months). It shows the long-term trend. For a LEAPS call you ideally want the price above it, and the 50-day above the 200-day.`,
+      vs(t.sma200));
+    srow("52-week range", `${fmt$(t.low52)} – ${fmt$(t.high52)}`,
+      `The lowest and highest closing prices over the past year. Today's price is ${fmtPct(t.fromHighPct)} from the high and ${fmtPct(t.fromLowPct)} from the low.`,
+      `${fmtPct(t.fromHighPct)} from high`);
+    if (t.ret1y != null) srow("1-year return", fmtPct(t.ret1y),
+      `How much the share price has changed over the past year, not counting dividends.`);
   }
-  srow("30-day IV", data.iv30 != null ? data.iv30.toFixed(1) + "%" : null);
-  srow("1-yr realized vol", a.ivc.hv1y != null ? a.ivc.hv1y.toFixed(1) + "%" : null);
+  if (data.iv30 != null) srow("30-day IV", data.iv30.toFixed(1) + "%",
+    `Implied volatility: how big a yearly price swing the options market expects over the next 30 days. Higher IV makes options more expensive.`,
+    a.ivc.ratio != null ? `${a.ivc.ratio.toFixed(2)}× normal` : null);
+  if (a.ivc.hv1y != null) srow("1-yr realized vol", a.ivc.hv1y.toFixed(1) + "%",
+    `How much the stock actually swung over the past year, as a yearly figure. If 30-day IV is well above this, options are pricier than usual.`);
   const ed = settings().earningsOverride || data.earnings.date;
+  const edDays = ed ? daysBetween(data.today, ed) : null;
   srow("Next earnings", ed ? fmtDate(ed) : data.isIndex ? "n/a" : "not found",
-    ed ? (settings().earningsOverride ? "your date" : data.earnings.source) : data.isIndex ? "index" : null);
-  srow("Sector", f.sector || null);
-  srow("Market cap", f.marketCap != null ? fmtBig(f.marketCap) : null);
-  srow("Revenue growth", f.revenueGrowth != null ? fmtPct(f.revenueGrowth * 100) : null);
-  srow("Profit margin", f.profitMargin != null ? fmtPct(f.profitMargin * 100) : null);
-  srow("Forward P/E", f.forwardPE != null ? f.forwardPE.toFixed(1) : null);
+    data.isIndex ? "Indexes don't report earnings."
+      : ed ? `The next scheduled earnings report${settings().earningsOverride ? " (the date you entered)" : data.earnings.source ? `, from ${data.earnings.source}` : ""}. Options are usually expensive just before earnings and get cheaper right after, so it's often better to buy after the report.`
+      : "We couldn't find the next earnings date. Look it up and enter it in the box below, so the IV check can use it.",
+    edDays != null && edDays >= 0 ? `in ${edDays} day${edDays === 1 ? "" : "s"}` : null);
+  if (f.sector) srow("Sector", f.sector,
+    `The part of the economy the company belongs to${f.industry ? `. Its industry is ${f.industry}` : ""}.`);
+  if (f.marketCap != null) srow("Market cap", fmtBig(f.marketCap),
+    "The total value of all the company's shares (share price × shares outstanding). Bigger companies are usually more stable.");
+  if (f.revenueGrowth != null) srow("Revenue growth", fmtPct(f.revenueGrowth * 100),
+    "How much the company's sales grew compared with the same quarter a year ago. Steady growth supports a long-term bullish bet.",
+    "year over year");
+  if (f.profitMargin != null) srow("Profit margin", fmtPct(f.profitMargin * 100),
+    "The share of revenue left as profit after all costs. Positive and rising is a good sign.");
+  if (f.forwardPE != null) srow("Forward P/E", f.forwardPE.toFixed(1),
+    "Share price divided by next year's expected earnings per share. It shows how much investors pay for each $1 of future profit. Lower can mean cheaper, but compare it with similar companies.");
 
   // checks
   const cbox = $("checks");

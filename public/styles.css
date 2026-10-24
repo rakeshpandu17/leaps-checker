@@ -87,7 +87,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .kv dd { margin: 0; min-width: 0; display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: baseline; gap: 0 8px; text-align: right; }
 .kv dd .v { font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .kv dd .n { font-size: .8rem; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
-#bestKv dd .v { font-weight: 600; }
+.kv dd .v { font-weight: 600; }
 .tip { position: relative; display: flex; align-items: center; gap: 6px; }
 .tip-btn {
   flex: none; width: 18px; height: 18px; padding: 0; border-radius: 50%;
@@ -97,7 +97,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .tip-box {
   display: none; position: absolute; z-index: 20; left: 0; top: calc(100% + 6px); width: min(300px, 80vw);
   padding: 10px 12px; border-radius: 8px; background: var(--ink); color: var(--bg);
-  font: 400 .86rem/1.45 var(--body); text-align: left; box-shadow: 0 6px 20px rgba(0, 0, 0, .25);
+  font: 400 .86rem/1.45 var(--body); text-align: left; white-space: normal; box-shadow: 0 6px 20px rgba(0, 0, 0, .25);
 }
 .tip:hover .tip-box, .tip-btn:focus + .tip-box { display: block; }
 .override { display: grid; gap: 4px; padding-top: 8px; border-top: 1px dashed var(--line); }
