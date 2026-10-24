@@ -118,7 +118,7 @@ test("ticker search keeps US stocks, ETFs and indexes", async () => {
 test("nightly scan snapshot round-trips to the same contract", async () => {
   const { scan } = await import("../scripts/nightly-scan.mjs");
   const { fromSnapshot } = await import("../public/snapshot.js");
-  const snap = await scan(["SOFI"], { fetchFn: mockFetch({ options: () => chain() }), now, log: () => {} });
+  const snap = await scan(["SOFI"], { fetchFn: mockFetch({ options: () => chain() }), now, log: () => {}, polite: false });
   assert.equal(snap.count, 1);
   const live = await get();
   const d = fromSnapshot("SOFI", JSON.parse(JSON.stringify(snap.stocks.SOFI)), TODAY);
@@ -126,4 +126,15 @@ test("nightly scan snapshot round-trips to the same contract", async () => {
   assert.equal(a2.best.symbol, a1.best.symbol);
   assert.equal(a2.verdict.level, a1.verdict.level);
   assert.ok(JSON.stringify(snap).length < 40000, "snapshot per stock stays small");
+});
+
+test("polite fetch retries a rate-limited request", async () => {
+  const { politeFetch } = await import("../scripts/nightly-scan.mjs");
+  let calls = 0;
+  const flaky = async () => (++calls < 3 ? new Response("slow down", { status: 429 }) : new Response("{}", { status: 200 }));
+  const f = politeFetch(flaky, { gapMs: 1, backoffMs: 5 });
+  const r = await f("https://cdn.cboe.com/x.json");
+  assert.equal(r.status, 200);
+  assert.equal(calls, 3);
+  assert.equal(f.stats.retried, 2);
 });

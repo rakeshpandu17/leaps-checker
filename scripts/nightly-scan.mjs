@@ -6,8 +6,10 @@ import { gatherData } from "../functions/_lib/data.js";
 import { SCAN_UNIVERSE } from "./scan-universe.mjs";
 
 const OUT = new URL("../public/data/scan.json", import.meta.url);
-const CONCURRENCY = 4;
-const PAUSE_MS = 150;
+const CONCURRENCY = 2;
+const PAUSE_MS = 400;
+const MIN_GAP_MS = 250; // at most ~4 requests a second to any data source
+const RETRY_STATUS = new Set([403, 429, 500, 502, 503, 504]);
 const r2 = (x) => (x == null ? x : Math.round(x * 100) / 100);
 const r4 = (x) => (x == null ? x : Math.round(x * 10000) / 10000);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -36,7 +38,35 @@ export function slim(d) {
   };
 }
 
-export async function scan(tickers, { fetchFn = fetch, now = new Date(), log = console.log } = {}) {
+// Wraps fetch so the scan stays under the free sources' rate limits: requests to each host are spaced
+// out, and a refused request (rate limit or temporary error) is retried after a growing wait.
+export function politeFetch(fetchFn, { gapMs = MIN_GAP_MS, retries = 3, backoffMs = 4000 } = {}) {
+  const nextSlot = new Map();
+  const stats = { retried: 0, statuses: {} };
+  const wrapped = async (url, init) => {
+    const host = new URL(String(url)).host;
+    for (let attempt = 0; ; attempt++) {
+      const now = Date.now();
+      const slot = Math.max(now, nextSlot.get(host) || 0);
+      nextSlot.set(host, slot + gapMs);
+      if (slot > now) await sleep(slot - now);
+      const res = await fetchFn(url, init);
+      if (!RETRY_STATUS.has(res.status) || attempt >= retries) {
+        if (!res.ok) stats.statuses[res.status] = (stats.statuses[res.status] || 0) + 1;
+        return res;
+      }
+      stats.retried++;
+      const wait = Number(res.headers.get("retry-after")) * 1000 || backoffMs * 2 ** attempt;
+      nextSlot.set(host, Date.now() + wait); // pause the whole host, not just this request
+      await sleep(wait);
+    }
+  };
+  wrapped.stats = stats;
+  return wrapped;
+}
+
+export async function scan(tickers, { fetchFn = fetch, now = new Date(), log = console.log, polite = true } = {}) {
+  if (polite) fetchFn = politeFetch(fetchFn);
   const stocks = {};
   const failed = [];
   let i = 0;
@@ -55,6 +85,7 @@ export async function scan(tickers, { fetchFn = fetch, now = new Date(), log = c
   };
   await Promise.all(Array.from({ length: CONCURRENCY }, worker));
   log(`Scanned ${tickers.length}: ${Object.keys(stocks).length} ok, ${failed.length} failed${failed.length ? " (" + failed.join(", ") + ")" : ""}`);
+  if (fetchFn.stats) log(`Retries: ${fetchFn.stats.retried}; failed responses by status: ${JSON.stringify(fetchFn.stats.statuses)}`);
   return { generatedAt: now.toISOString(), date: now.toISOString().slice(0, 10), count: Object.keys(stocks).length, failed, stocks };
 }
 
