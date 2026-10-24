@@ -21,7 +21,13 @@ Data limits: quotes are about 15 minutes delayed; free sources have no IV histor
 estimated by comparing today's 30-day IV with the stock's own realized volatility over the past year.
 If Yahoo or Nasdaq don't answer, the page says so and lets you type the earnings date in.
 
-## Deploy (free, Cloudflare Pages)
+## Deploy (free, Cloudflare)
+
+Works as either a Cloudflare Worker (uses `wrangler.jsonc` + `src/worker.js`) or a Pages site.
+
+**As a Worker:** Compute → Workers & Pages → Create → Import a repository → pick this repo, keep the default deploy command (`npx wrangler deploy`). The name must stay `leaps-checker` (or change `name` in `wrangler.jsonc` to match).
+
+**As Pages:**
 
 1. Cloudflare dashboard → Workers & Pages → Create → Pages → Connect to Git → pick this repo.
 2. Framework preset: None. Build command: leave empty. Build output directory: `public`.
