@@ -248,6 +248,9 @@ export async function gatherData(ticker, { fetchFn = fetch, now = new Date() } =
   const price = quote.price ?? chain.underlying.price ?? (history.length ? history[history.length - 1].c : null);
   if (!price) return { ok: false, ticker, error: `Couldn't get a current price for ${ticker}.` };
 
+  // Only in- or near-the-money calls can reach the 0.65+ delta range; drop the rest to keep the payload small.
+  const calls = chain.calls.filter((c) => c.strike <= price * 1.1);
+
   return {
     ok: true,
     ticker,
@@ -259,7 +262,7 @@ export async function gatherData(ticker, { fetchFn = fetch, now = new Date() } =
     changePct: quote.changePct ?? null,
     iv30: quote.iv30 ?? chain.underlying.iv30 ?? null,
     lastExpiry: chain.expiriesAll[chain.expiriesAll.length - 1] || null,
-    calls: chain.calls,
+    calls,
     history,
     fundamentals,
     earnings: { date: earningsDate || null, source: earningsSource },
