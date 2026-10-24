@@ -137,22 +137,41 @@ function render() {
   const b = a.best;
   const kv = $("bestKv");
   kv.replaceChildren();
-  const row = (k, val) => kv.append(el("dt", {}, k), el("dd", {}, val));
+  let tipN = 0;
+  const label = (k, tip) => {
+    if (!tip) return el("dt", {}, k);
+    const id = "tip-" + ++tipN;
+    return el("dt", { class: "tip" }, k,
+      el("button", { type: "button", class: "tip-btn", "aria-label": `What is ${k}?`, "aria-describedby": id }, "?"),
+      el("span", { class: "tip-box", role: "tooltip", id }, tip));
+  };
+  const row = (k, val, tip) => kv.append(label(k, tip), el("dd", {}, val));
   if (b) {
     $("bestTitle").textContent = `${data.ticker} ${fmtDate(b.expiry)} $${b.strike} call`;
-    row("Mid price", `${fmt$(b.mid)} (bid ${fmt$(b.bid)} / ask ${fmt$(b.ask)})`);
-    row("Cost per contract", fmt$(b.mid * 100));
-    row("Delta", b.delta.toFixed(2) + (b.computedGreeks ? " (computed)" : ""));
-    row("Break-even", `${fmt$(b.breakeven)} (${fmtPct(b.breakevenPct)})`);
-    row("Extrinsic", `${fmt$(b.extrinsic)} (${b.extrinsicPctOfPremium.toFixed(0)}% of premium)`);
-    row("Days to expiry", String(b.dte));
-    row("Implied vol", b.iv ? (b.iv * 100).toFixed(1) + "%" : "n/a");
-    row("Open interest", b.oi.toLocaleString("en-US"));
-    row("Contract", b.symbol);
+    row("Mid price", `${fmt$(b.mid)} (bid ${fmt$(b.bid)} / ask ${fmt$(b.ask)})`,
+      `The fair price, halfway between what buyers are offering (bid, ${fmt$(b.bid)}) and what sellers are asking (ask, ${fmt$(b.ask)}). Place a limit order near ${fmt$(b.mid)} instead of paying the ask.`);
+    row("Cost per contract", fmt$(b.mid * 100),
+      `One contract covers 100 shares, so you pay the price × 100 = ${fmt$(b.mid * 100)}. This is the most you can lose on one contract.`);
+    row("Delta", b.delta.toFixed(2) + (b.computedGreeks ? " (computed)" : ""),
+      `How much the option moves when the stock moves $1. At ${b.delta.toFixed(2)}, a $1 rise in ${data.ticker} adds about ${fmt$(b.delta)} per share to the option. Closer to 1 means it acts more like owning the stock.`);
+    row("Break-even", `${fmt$(b.breakeven)} (${fmtPct(b.breakevenPct)})`,
+      `The stock price you need at expiry just to get your money back: strike $${b.strike} + price ${fmt$(b.mid)} = ${fmt$(b.breakeven)}. That is ${fmtPct(b.breakevenPct)} from today. Above it you profit.`);
+    row("Extrinsic", `${fmt$(b.extrinsic)} (${b.extrinsicPctOfPremium.toFixed(0)}% of premium)`,
+      `The part of the price you pay for time, on top of the option's built-in value (stock − strike). It shrinks to zero by expiry, so it's what you lose if the stock goes nowhere. Lower is better.`);
+    row("Days to expiry", String(b.dte),
+      `Days until the option expires on ${fmtDate(b.expiry)}. More time gives the stock room to rise. Plan to sell or roll it about 9 months before expiry, when time decay speeds up.`);
+    row("Implied vol", b.iv ? (b.iv * 100).toFixed(1) + "%" : "n/a",
+      "How big a yearly price swing the market is pricing in. Higher implied volatility makes options more expensive, and it often drops after earnings.");
+    row("Open interest", b.oi.toLocaleString("en-US"),
+      "How many of these exact contracts are open right now. More open interest usually means more buyers and sellers, so it's easier to get in and out at a fair price. Hundreds or more is good.");
+    row("Contract", b.symbol,
+      `The option's official code: ticker, expiry date (YYMMDD), C for call, and the strike × 1000. Search it at your broker to find this exact contract.`);
   } else {
     $("bestTitle").textContent = "No contract fits";
-    row("Longest expiry", data.lastExpiry ? fmtDate(data.lastExpiry) : "n/a");
-    row("LEAPS calls found", String(data.calls.length));
+    row("Longest expiry", data.lastExpiry ? fmtDate(data.lastExpiry) : "n/a",
+      "The furthest-out expiry date listed for this ticker. LEAPS need one at least 9 to 12 months away.");
+    row("LEAPS calls found", String(data.calls.length),
+      "How many long-dated call options are listed near today's price. None of them passed the delta, time and liquidity rules.");
   }
 
   // stock card
@@ -211,7 +230,10 @@ function render() {
   }
 
   const p = a.projection;
-  if (p) row("If stock hits " + fmt$(p.target), `${fmtPct(p.optionReturn, 0)} by expiry (${p.basis})`);
+  if (p) row("If stock hits " + fmt$(p.target), `${fmtPct(p.optionReturn, 0)} by expiry (${p.basis})`,
+    p.basis === "analyst target"
+      ? `What this call would return by expiry if ${data.ticker} reached the analysts' average price target of ${fmt$(p.target)}. A rough guide for comparing ideas, not a forecast.`
+      : `What this call would return by expiry if ${data.ticker} grew 10% a year, to about ${fmt$(p.target)}. There is no analyst target, so this is an assumption, not a forecast.`);
   const notes = [budgetNote, data.notes.length ? "Data notes: " + data.notes.join(" ") : ""].filter(Boolean);
   $("notes").textContent = notes.join(" ");
   $("result").hidden = false;
