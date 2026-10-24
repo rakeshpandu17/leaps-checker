@@ -31,7 +31,7 @@ h2 { font-size: 1.45rem; }
 h3 { font-size: 1.1rem; }
 p { margin: 0; }
 .top { display: grid; gap: 10px; }
-.lede { color: var(--muted); max-width: 68ch; }
+.lede { color: var(--muted); font-size: 1.05rem; }
 .eyebrow { font: 600 .72rem/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
 
 button { font: 600 .92rem var(--body); border-radius: 6px; padding: 9px 16px; cursor: pointer; border: 1px solid var(--line); background: var(--surface); color: var(--ink); }
