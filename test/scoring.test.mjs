@@ -138,3 +138,19 @@ test("polite fetch retries a rate-limited request", async () => {
   assert.equal(calls, 3);
   assert.equal(f.stats.retried, 2);
 });
+
+test("scan can fetch through the site's own API", async () => {
+  const { scan } = await import("../scripts/nightly-scan.mjs");
+  const { onRequestGet } = await import("../functions/api/analyze.js");
+  const inner = mockFetch();
+  const prev = globalThis.fetch;
+  globalThis.fetch = inner;
+  try {
+    const viaFetch = async (url) => onRequestGet({ request: new Request(String(url)), waitUntil() {} });
+    const snap = await scan(["SOFI"], { fetchFn: viaFetch, via: "https://example.workers.dev", log: () => {}, polite: false });
+    assert.equal(snap.count, 1);
+    assert.ok(snap.stocks.SOFI.calls.length > 5);
+  } finally {
+    globalThis.fetch = prev;
+  }
+});

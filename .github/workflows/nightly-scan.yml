@@ -24,6 +24,9 @@ jobs:
           node-version: 20
       - name: Scan about 330 tickers
         run: node scripts/nightly-scan.mjs
+        env:
+          # Fetch through the live site, because Cboe blocks most requests from GitHub's runners.
+          SCAN_VIA: https://leaps-startegy-checker.rakeshpandu17.workers.dev
       - name: Commit the new snapshot
         run: |
           git config user.name "leaps-scan-bot"

@@ -65,7 +65,15 @@ export function politeFetch(fetchFn, { gapMs = MIN_GAP_MS, retries = 3, backoffM
   return wrapped;
 }
 
-export async function scan(tickers, { fetchFn = fetch, now = new Date(), log = console.log, polite = true } = {}) {
+// When `via` is set (the site's own URL), each ticker is fetched through the site's /api/analyze
+// instead of from the data sources directly. Cboe refuses most requests from GitHub's runners,
+// but answers the site, which runs on Cloudflare.
+async function gatherVia(via, ticker, fetchFn) {
+  const res = await fetchFn(`${via.replace(/\/$/, "")}/api/analyze?ticker=${encodeURIComponent(ticker)}`);
+  return res.json();
+}
+
+export async function scan(tickers, { fetchFn = fetch, now = new Date(), log = console.log, polite = true, via = null } = {}) {
   if (polite) fetchFn = politeFetch(fetchFn);
   const stocks = {};
   const failed = [];
@@ -74,7 +82,7 @@ export async function scan(tickers, { fetchFn = fetch, now = new Date(), log = c
     while (i < tickers.length) {
       const t = tickers[i++];
       try {
-        const d = await gatherData(t, { fetchFn, now });
+        const d = via ? await gatherVia(via, t, fetchFn) : await gatherData(t, { fetchFn, now });
         if (d.ok) stocks[t] = slim(d);
         else failed.push(t);
       } catch (e) {
@@ -90,7 +98,9 @@ export async function scan(tickers, { fetchFn = fetch, now = new Date(), log = c
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  const result = await scan(SCAN_UNIVERSE);
+  const via = process.env.SCAN_VIA || null;
+  if (via) console.log(`Fetching through ${via}`);
+  const result = await scan(SCAN_UNIVERSE, { via });
   // Don't replace a good snapshot with a mostly failed one.
   if (result.count < SCAN_UNIVERSE.length * 0.5) {
     console.error("Too many failures; keeping the previous scan.");
