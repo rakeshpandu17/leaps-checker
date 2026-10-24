@@ -145,21 +145,27 @@ function render() {
       el("button", { type: "button", class: "tip-btn", "aria-label": `What is ${k}?`, "aria-describedby": id }, "?"),
       el("span", { class: "tip-box", role: "tooltip", id }, tip));
   };
-  const row = (k, val, tip) => kv.append(label(k, tip), el("dd", {}, val));
+  const row = (k, val, tip, note) =>
+    kv.append(label(k, tip), el("dd", {}, el("span", { class: "v" }, val), note ? el("span", { class: "n" }, note) : null));
   if (b) {
     $("bestTitle").textContent = `${data.ticker} ${fmtDate(b.expiry)} $${b.strike} call`;
-    row("Mid price", `${fmt$(b.mid)} (bid ${fmt$(b.bid)} / ask ${fmt$(b.ask)})`,
-      `The fair price, halfway between what buyers are offering (bid, ${fmt$(b.bid)}) and what sellers are asking (ask, ${fmt$(b.ask)}). Place a limit order near ${fmt$(b.mid)} instead of paying the ask.`);
+    row("Mid price", fmt$(b.mid),
+      `The fair price, halfway between what buyers are offering (bid, ${fmt$(b.bid)}) and what sellers are asking (ask, ${fmt$(b.ask)}). Place a limit order near ${fmt$(b.mid)} instead of paying the ask.`,
+      `${fmt$(b.bid)} – ${fmt$(b.ask)}`);
     row("Cost per contract", fmt$(b.mid * 100),
       `One contract covers 100 shares, so you pay the price × 100 = ${fmt$(b.mid * 100)}. This is the most you can lose on one contract.`);
-    row("Delta", b.delta.toFixed(2) + (b.computedGreeks ? " (computed)" : ""),
-      `How much the option moves when the stock moves $1. At ${b.delta.toFixed(2)}, a $1 rise in ${data.ticker} adds about ${fmt$(b.delta)} per share to the option. Closer to 1 means it acts more like owning the stock.`);
-    row("Break-even", `${fmt$(b.breakeven)} (${fmtPct(b.breakevenPct)})`,
-      `The stock price you need at expiry just to get your money back: strike $${b.strike} + price ${fmt$(b.mid)} = ${fmt$(b.breakeven)}. That is ${fmtPct(b.breakevenPct)} from today. Above it you profit.`);
-    row("Extrinsic", `${fmt$(b.extrinsic)} (${b.extrinsicPctOfPremium.toFixed(0)}% of premium)`,
-      `The part of the price you pay for time, on top of the option's built-in value (stock − strike). It shrinks to zero by expiry, so it's what you lose if the stock goes nowhere. Lower is better.`);
+    row("Delta", b.delta.toFixed(2),
+      `How much the option moves when the stock moves $1. At ${b.delta.toFixed(2)}, a $1 rise in ${data.ticker} adds about ${fmt$(b.delta)} per share to the option. Closer to 1 means it acts more like owning the stock.` + (b.computedGreeks ? " This one is computed from the option price, because the quote had no Greeks." : ""),
+      b.computedGreeks ? "computed" : null);
+    row("Break-even", fmt$(b.breakeven),
+      `The stock price you need at expiry just to get your money back: strike $${b.strike} + price ${fmt$(b.mid)} = ${fmt$(b.breakeven)}. That is ${fmtPct(b.breakevenPct)} from today. Above it you profit.`,
+      `${fmtPct(b.breakevenPct)} away`);
+    row("Extrinsic", fmt$(b.extrinsic),
+      `The part of the price you pay for time, on top of the option's built-in value (stock − strike). It shrinks to zero by expiry, so it's what you lose if the stock goes nowhere. Lower is better.`,
+      `${b.extrinsicPctOfPremium.toFixed(0)}% of premium`);
     row("Days to expiry", String(b.dte),
-      `Days until the option expires on ${fmtDate(b.expiry)}. More time gives the stock room to rise. Plan to sell or roll it about 9 months before expiry, when time decay speeds up.`);
+      `Days until the option expires on ${fmtDate(b.expiry)}. More time gives the stock room to rise. Plan to sell or roll it about 9 months before expiry, when time decay speeds up.`,
+      `${(b.dte / 30.44).toFixed(1)} months`);
     row("Implied vol", b.iv ? (b.iv * 100).toFixed(1) + "%" : "n/a",
       "How big a yearly price swing the market is pricing in. Higher implied volatility makes options more expensive, and it often drops after earnings.");
     row("Open interest", b.oi.toLocaleString("en-US"),
@@ -179,7 +185,8 @@ function render() {
   $("stockTitle").textContent = f.name ? `${f.name} (${data.ticker})` : data.ticker;
   const sk = $("stockKv");
   sk.replaceChildren();
-  const srow = (k, val) => val != null && sk.append(el("dt", {}, k), el("dd", {}, val));
+  const srow = (k, val, note) =>
+    val != null && sk.append(el("dt", {}, k), el("dd", {}, el("span", { class: "v" }, val), note ? el("span", { class: "n" }, note) : null));
   srow("Price", fmt$(data.price));
   const t = a.trend;
   if (t) {
@@ -191,7 +198,8 @@ function render() {
   srow("30-day IV", data.iv30 != null ? data.iv30.toFixed(1) + "%" : null);
   srow("1-yr realized vol", a.ivc.hv1y != null ? a.ivc.hv1y.toFixed(1) + "%" : null);
   const ed = settings().earningsOverride || data.earnings.date;
-  srow("Next earnings", ed ? fmtDate(ed) + (settings().earningsOverride ? " (yours)" : data.earnings.source ? ` (${data.earnings.source})` : "") : data.isIndex ? "n/a (index)" : "not found");
+  srow("Next earnings", ed ? fmtDate(ed) : data.isIndex ? "n/a" : "not found",
+    ed ? (settings().earningsOverride ? "your date" : data.earnings.source) : data.isIndex ? "index" : null);
   srow("Sector", f.sector || null);
   srow("Market cap", f.marketCap != null ? fmtBig(f.marketCap) : null);
   srow("Revenue growth", f.revenueGrowth != null ? fmtPct(f.revenueGrowth * 100) : null);
@@ -230,10 +238,11 @@ function render() {
   }
 
   const p = a.projection;
-  if (p) row("If stock hits " + fmt$(p.target), `${fmtPct(p.optionReturn, 0)} by expiry (${p.basis})`,
+  if (p) row(p.basis === "analyst target" ? "Return at target" : "Return at +10%/yr", fmtPct(p.optionReturn, 0),
     p.basis === "analyst target"
       ? `What this call would return by expiry if ${data.ticker} reached the analysts' average price target of ${fmt$(p.target)}. A rough guide for comparing ideas, not a forecast.`
-      : `What this call would return by expiry if ${data.ticker} grew 10% a year, to about ${fmt$(p.target)}. There is no analyst target, so this is an assumption, not a forecast.`);
+      : `What this call would return by expiry if ${data.ticker} grew 10% a year, to about ${fmt$(p.target)}. There is no analyst target, so this is an assumption, not a forecast.`,
+    `at ${fmt$(p.target)}`);
   const notes = [budgetNote, data.notes.length ? "Data notes: " + data.notes.join(" ") : ""].filter(Boolean);
   $("notes").textContent = notes.join(" ");
   $("result").hidden = false;
