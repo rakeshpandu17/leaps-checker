@@ -25,7 +25,7 @@ If Yahoo or Nasdaq don't answer, the page says so and lets you type the earnings
 
 Works as either a Cloudflare Worker (uses `wrangler.jsonc` + `src/worker.js`) or a Pages site.
 
-**As a Worker:** Compute → Workers & Pages → Create → Import a repository → pick this repo, keep the default deploy command (`npx wrangler deploy`). The name must stay `leaps-checker` (or change `name` in `wrangler.jsonc` to match).
+**As a Worker:** Compute → Workers & Pages → Create → Import a repository → pick this repo, keep the default deploy command (`npx wrangler deploy`). The Worker name must match `name` in `wrangler.jsonc` (currently `leaps-startegy-checker`).
 
 **As Pages:**
 

@@ -1,7 +1,7 @@
 // Used when this repo is deployed as a Cloudflare Worker (Workers Builds).
 // Cloudflare Pages ignores this file and uses public/ + functions/ instead.
 {
-  "name": "leaps-checker",
+  "name": "leaps-startegy-checker",
   "main": "src/worker.js",
   "compatibility_date": "2025-09-01",
   "assets": { "directory": "./public", "binding": "ASSETS" }
