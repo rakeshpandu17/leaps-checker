@@ -112,11 +112,13 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   padding: 10px 12px; border-radius: 8px; background: var(--ink); color: var(--bg);
   font: 400 .86rem/1.45 var(--body); text-align: left; white-space: normal; box-shadow: 0 6px 20px rgba(0, 0, 0, .25);
 }
+.tip.inline { display: inline-flex; vertical-align: baseline; }
+.details .tip-box { color: var(--bg); }
 .tip:hover .tip-box, .tip-btn:focus + .tip-box { display: block; }
 .override { display: grid; gap: 4px; padding-top: 8px; border-top: 1px dashed var(--line); }
 .override input { max-width: 200px; }
 
-.checks { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.checks { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
 .check { display: grid; grid-template-columns: 2.2rem 1fr; gap: 4px 12px; padding: 16px 18px; border-top: 1px solid var(--line); }
 .check:first-child { border-top: 0; }
 .num { font: 600 .9rem/1.7 var(--mono); color: var(--muted); }

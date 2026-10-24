@@ -27,7 +27,7 @@ function variedFetch() {
     return base(url);
   };
 }
-const sampleSnapshot = JSON.stringify(await scan(SCAN_UNIVERSE, { fetchFn: variedFetch(), log: () => {} }));
+const sampleSnapshot = JSON.stringify(await scan(SCAN_UNIVERSE, { fetchFn: variedFetch(), log: () => {}, polite: false }));
 
 globalThis.fetch = mockFetch();
 const types = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css" };

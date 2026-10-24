@@ -6,6 +6,9 @@ const $ = (id) => document.getElementById(id);
 const PREFS = "leaps-go-prefs-v1";
 const IDEA_BUDGET = 0.03; // one contract may cost at most 3% of the portfolio
 const IDEA_LIMIT = 20;
+const ROLL_TIP = "Sell means closing the trade: you sell the call back and keep whatever it is worth. " +
+  "Roll means selling this call and buying a new one with a later expiry, often at a higher strike, so you keep your position in the stock. " +
+  "Doing either about 9 months before expiry avoids the fast time decay in an option's last months.";
 const LABEL = { pass: "Pass", warn: "Caution", fail: "Fail", info: "Info" };
 const BADGE = { go: "Go", wait: "Wait", nogo: "No-go" };
 
@@ -232,10 +235,19 @@ function render() {
     "Share price divided by next year's expected earnings per share. It shows how much investors pay for each $1 of future profit. Lower can mean cheaper, but compare it with similar companies.");
 
   // checks
+  const detail = (d) => {
+    if (!d.startsWith("Sell or roll")) return el("li", {}, d);
+    const id = "tip-" + ++tipN;
+    return el("li", {},
+      el("span", { class: "tip inline" }, "Sell or roll",
+        el("button", { type: "button", class: "tip-btn", "aria-label": "What does sell or roll mean?", "aria-describedby": id }, "?"),
+        el("span", { class: "tip-box", role: "tooltip", id }, ROLL_TIP)),
+      d.slice("Sell or roll".length));
+  };
   const cbox = $("checks");
   cbox.replaceChildren();
   for (const c of a.checks) {
-    const details = c.details.length ? el("ul", { class: "details" }, ...c.details.map((d) => el("li", {}, d))) : null;
+    const details = c.details.length ? el("ul", { class: "details" }, ...c.details.map(detail)) : null;
     cbox.append(
       el("article", { class: "check" },
         el("span", { class: "num" }, String(c.id).padStart(2, "0")),
