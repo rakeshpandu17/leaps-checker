@@ -16,6 +16,7 @@
     <span class="eyebrow">Long-dated call options</span>
     <h1>LEAPS Go/No-Go</h1>
     <p class="lede">Type a stock or ETF ticker. The checker pulls the price, the LEAPS option chain, the earnings date and basic company data, picks the best-fitting deep in-the-money call, and scores it on the eight checklist rules.</p>
+    <p class="caveat" role="note"><strong>For education only. Not financial advice.</strong> These analyses and suggestions are for learning, not recommendations to buy or sell. Do your own research before you decide. No options strategy is guaranteed safe, and a LEAPS call can lose its entire premium. Check the live quote with your broker before you trade. <a href="#disclosures">Full disclosures</a></p>
   </header>
 
   <form class="ticket" id="form" autocomplete="off">
@@ -108,7 +109,19 @@
   </section>
 
   <footer class="foot">
-    <p class="caveat"><strong>Educational, not financial advice.</strong> No options strategy is guaranteed safe. A LEAPS call can lose its whole premium. Check the live quote with your broker before you trade.</p>
+    <section class="disclosures" id="disclosures" aria-labelledby="disc-h">
+      <h2 id="disc-h">Disclosures</h2>
+      <p class="caveat"><strong>For education only. Not financial advice.</strong> The analysis, verdicts and stock ideas on this page are for learning purposes only. They are not recommendations to buy, sell or hold any security. Do your own research and due diligence before making any decision. No options strategy is guaranteed safe, and a LEAPS call can lose its entire premium. Check the live quote with your broker before you trade.</p>
+      <ul>
+        <li><strong>Not an adviser.</strong> This tool and its author are not registered investment advisers, brokers or financial planners. The results do not consider your personal finances, goals, taxes or risk tolerance. Consider talking to a licensed professional.</li>
+        <li><strong>Options carry substantial risk.</strong> Options are not suitable for every investor. Leverage magnifies both gains and losses, and you can lose 100% of the money you pay. Before trading options, read <a href="https://www.theocc.com/Company-Information/Documents-and-Archives/Options-Disclosure-Document" target="_blank" rel="noopener">Characteristics and Risks of Standardized Options</a> from the Options Clearing Corporation.</li>
+        <li><strong>Data may be delayed or wrong.</strong> Prices, Greeks, earnings dates and company figures come from free third-party sources, are about 15 minutes delayed or more, and may be incomplete or inaccurate. Some figures, such as computed delta and the IV-rank estimate, are approximations. Everything is provided as is, without warranty.</li>
+        <li><strong>Projections are not predictions.</strong> Projected returns assume the stock reaches the analysts' average target, or grows 10% a year, by expiry. They are a way to compare ideas, not forecasts. Past performance and analyst targets do not guarantee future results.</li>
+        <li><strong>Costs are not included.</strong> Results ignore commissions, fees, taxes, assignment and the cost of crossing the bid-ask spread.</li>
+        <li><strong>The idea list is not an endorsement.</strong> The stocks and ETFs screened are chosen only because they have liquid long-dated options. Inclusion does not mean a stock is a good investment.</li>
+        <li><strong>You are responsible for your trades.</strong> By using this page you accept that any decision you make is your own, and that the author is not liable for any loss.</li>
+      </ul>
+    </section>
     <p>Data: Cboe delayed quotes (about 15 minutes late) for price, option chain, Greeks and history; Yahoo Finance and Nasdaq for earnings dates and company figures. Free sources have no IV history, so the IV check compares today's implied volatility with the stock's own realized volatility as an estimate of IV rank.</p>
   </footer>
 </div>

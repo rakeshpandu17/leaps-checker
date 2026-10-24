@@ -121,6 +121,12 @@ th:first-child, td:first-child { text-align: left; }
 th { font: 600 .7rem var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
 td { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 .notes { color: var(--muted); font-size: .88rem; }
+.caveat a { color: var(--accent); font-weight: 600; }
+.disclosures { display: grid; gap: 10px; }
+.disclosures h2 { font-size: 1.1rem; color: var(--ink); }
+.disclosures ul { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; }
+.disclosures li strong { color: var(--ink); }
+.disclosures a { color: var(--accent); }
 .foot { display: grid; gap: 10px; font-size: .86rem; color: var(--muted); }
 .caveat { border: 1px solid var(--warn); background: var(--warn-bg); color: var(--ink); border-radius: 8px; padding: 12px 14px; font-size: .93rem; }
 .caveat strong { color: var(--warn); }
