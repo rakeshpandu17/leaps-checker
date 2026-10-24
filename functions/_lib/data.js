@@ -221,6 +221,31 @@ async function fetchNasdaqEarnings(fetchFn, ticker, todayISO) {
   return parseNasdaqEarnings(json, todayISO);
 }
 
+// ---------- Ticker search (autocomplete) ----------
+
+const SEARCH_TYPES = { EQUITY: "Stock", ETF: "ETF", INDEX: "Index" };
+
+export function normalizeSearch(json) {
+  const quotes = (json && json.quotes) || [];
+  const out = [];
+  for (const q of quotes) {
+    const type = SEARCH_TYPES[q.quoteType];
+    const sym = String(q.symbol || "").replace(/^\^/, "");
+    // US listings only: foreign listings carry an exchange suffix such as ".L" or ".TO".
+    if (!type || !sym || sym.includes(".") || !/^[A-Z][A-Z0-9\-]{0,9}$/.test(sym)) continue;
+    out.push({ symbol: sym.replace("-", "."), name: q.longname || q.shortname || sym, type, exchange: q.exchDisp || q.exchange || "" });
+  }
+  return out.slice(0, 8);
+}
+
+export async function searchTickers(query, { fetchFn = fetch } = {}) {
+  const q = String(query || "").trim().slice(0, 40);
+  if (!q) return { ok: true, results: [] };
+  const url = `https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(q)}&quotesCount=10&newsCount=0&listsCount=0&enableFuzzyQuery=false`;
+  const json = await getJSON(fetchFn, url);
+  return { ok: true, results: normalizeSearch(json) };
+}
+
 // ---------- Batch quotes (for the idea screener) ----------
 
 export const MAX_BATCH = 40;

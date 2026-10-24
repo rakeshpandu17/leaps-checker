@@ -106,3 +106,11 @@ test("batch quotes", async () => {
   assert.deepEqual(Object.keys(r.quotes), ["SOFI", "AAPL"]);
   assert.equal(r.quotes.SOFI.price, 14.77);
 });
+
+test("ticker search keeps US stocks, ETFs and indexes", async () => {
+  const { searchTickers } = await import("../functions/_lib/data.js");
+  const r = await searchTickers("sof", { fetchFn: mockFetch() });
+  assert.deepEqual(r.results.map((x) => x.symbol), ["SOFI", "SOFX", "BRK.B", "SPX"]);
+  assert.equal(r.results[0].name, "SoFi Technologies, Inc.");
+  assert.equal(r.results[0].type, "Stock");
+});

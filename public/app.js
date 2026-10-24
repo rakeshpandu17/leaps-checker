@@ -1,5 +1,5 @@
 import { analyze, daysBetween } from "./scoring.js";
-import { UNIVERSE } from "./universe.js";
+import { UNIVERSE, NAMES } from "./universe.js";
 
 const $ = (id) => document.getElementById(id);
 const PREFS = "leaps-go-prefs-v1";
@@ -275,8 +275,149 @@ function render() {
 $("form").addEventListener("submit", (e) => {
   e.preventDefault();
   savePrefs();
-  run($("ticker").value);
+  const typed = $("ticker").value.trim();
+  // A highlighted suggestion wins; otherwise an exact ticker match, then the top suggestion that matches the text.
+  const pick = combo.current() || combo.resolve(typed);
+  combo.close();
+  run(pick || toSymbol(typed));
 });
+
+// ---------- ticker autocomplete ----------
+
+// Typed text -> ticker: "sofi" -> "SOFI"; a company name that matches one known name exactly -> its ticker.
+function toSymbol(text) {
+  const t = String(text || "").trim();
+  const byName = Object.entries(NAMES).find(([, n]) => n.toLowerCase() === t.toLowerCase());
+  return byName ? byName[0] : t.toUpperCase();
+}
+
+const combo = (() => {
+  const input = $("ticker");
+  const list = $("tickerList");
+  let items = [];
+  let active = -1;
+  let timer = null;
+  let seq = 0;
+  const remote = new Map(); // query -> results
+
+  function localMatches(q) {
+    const Q = q.toUpperCase(), lq = q.toLowerCase();
+    const scored = [];
+    for (const [sym, name] of Object.entries(NAMES)) {
+      const n = name.toLowerCase();
+      let score = -1;
+      if (sym === Q) score = 0;
+      else if (sym.startsWith(Q)) score = 1;
+      else if (n.startsWith(lq)) score = 2;
+      else if (n.split(/[\s(&-]+/).some((w) => w.startsWith(lq))) score = 3;
+      if (score >= 0) scored.push({ score, symbol: sym, name, type: /ETF|SPDR|iShares|Invesco/.test(name) ? "ETF" : /Index$/.test(name) ? "Index" : "Stock" });
+    }
+    return scored.sort((a, b) => a.score - b.score || a.symbol.length - b.symbol.length).slice(0, 8);
+  }
+
+  function merge(a, b) {
+    const seen = new Set();
+    return [...a, ...b].filter((x) => !seen.has(x.symbol) && seen.add(x.symbol)).slice(0, 8);
+  }
+
+  function highlight(text, q) {
+    const i = text.toLowerCase().indexOf(q.toLowerCase());
+    if (!q || i < 0) return [text];
+    return [text.slice(0, i), el("mark", {}, text.slice(i, i + q.length)), text.slice(i + q.length)];
+  }
+
+  function render(q) {
+    list.replaceChildren();
+    if (!items.length) {
+      if (q.length >= 2) list.append(el("li", { class: "empty", role: "option", "aria-disabled": "true" }, `No match for "${q}". Press Enter to try it as a ticker.`));
+      else return close();
+    }
+    items.forEach((it, i) => {
+      list.append(el("li", { id: "opt-" + i, role: "option", "aria-selected": String(i === active), "data-i": String(i) },
+        el("span", { class: "sym" }, ...highlight(it.symbol, q)),
+        el("span", { class: "nm" }, ...highlight(it.name, q)),
+        el("span", { class: "ty" }, it.type)));
+    });
+    list.hidden = false;
+    input.setAttribute("aria-expanded", "true");
+    if (active >= 0) input.setAttribute("aria-activedescendant", "opt-" + active);
+    else input.removeAttribute("aria-activedescendant");
+  }
+
+  function close() {
+    list.hidden = true;
+    input.setAttribute("aria-expanded", "false");
+    input.removeAttribute("aria-activedescendant");
+    active = -1;
+  }
+
+  function update() {
+    const q = input.value.trim();
+    if (!q) { items = []; return close(); }
+    const local = localMatches(q);
+    items = merge(local, remote.get(q.toLowerCase()) || []);
+    active = -1;
+    render(q);
+    clearTimeout(timer);
+    if (remote.has(q.toLowerCase())) return;
+    const my = ++seq;
+    timer = setTimeout(async () => {
+      try {
+        const r = await fetch(`/api/search?q=${encodeURIComponent(q)}`).then((x) => x.json());
+        const res = (r && r.results) || [];
+        remote.set(q.toLowerCase(), res);
+        if (my !== seq || input.value.trim() !== q) return;
+        items = merge(local, res);
+        render(q);
+      } catch (e) {}
+    }, 200);
+  }
+
+  function choose(i) {
+    const it = items[i];
+    if (!it) return;
+    input.value = it.symbol;
+    close();
+    savePrefs();
+    run(it.symbol);
+  }
+
+  input.addEventListener("input", update);
+  input.addEventListener("focus", () => { if (input.value.trim() && document.activeElement === input && items.length) render(input.value.trim()); });
+  input.addEventListener("blur", () => setTimeout(close, 120));
+  input.addEventListener("keydown", (e) => {
+    if (list.hidden || !items.length) return;
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      active = e.key === "ArrowDown" ? (active + 1) % items.length : (active <= 0 ? items.length - 1 : active - 1);
+      render(input.value.trim());
+      list.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: "nearest" });
+    } else if (e.key === "Escape") {
+      close();
+    } else if (e.key === "Tab" && active >= 0) {
+      input.value = items[active].symbol;
+      close();
+    }
+  });
+  list.addEventListener("mousedown", (e) => e.preventDefault()); // keep focus so the click lands
+  list.addEventListener("click", (e) => {
+    const li = e.target.closest("li[data-i]");
+    if (li) choose(+li.dataset.i);
+  });
+
+  return {
+    // The highlighted suggestion, if the user arrowed to one before pressing Enter.
+    current: () => (!list.hidden && active >= 0 && items[active] ? items[active].symbol : null),
+    resolve: (text) => {
+      const T = text.toUpperCase(), lt = text.toLowerCase();
+      const exact = items.find((x) => x.symbol === T);
+      if (exact) return exact.symbol;
+      const hit = items.find((x) => x.symbol.startsWith(T) || x.name.toLowerCase().includes(lt));
+      return hit ? hit.symbol : null;
+    },
+    close,
+  };
+})();
 $("quick").addEventListener("click", (e) => {
   const t = e.target.closest("button[data-t]");
   if (t) run(t.dataset.t);

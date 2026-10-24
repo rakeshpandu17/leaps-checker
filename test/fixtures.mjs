@@ -47,7 +47,7 @@ export const yahoo = (earnTs = Date.parse("2026-10-27T12:00:00Z") / 1000) => ({ 
 // A fetch stand-in that routes URLs to fixtures.
 export function mockFetch(over = {}) {
   const routes = {
-    options: () => chain(), quotes: () => quote(), historical: () => history(), yahoo: () => yahoo(), nasdaq: () => ({ data: { announcement: "Earnings announcement* for SOFI: Oct 27, 2026" } }), ...over,
+    options: () => chain(), quotes: () => quote(), historical: () => history(), yahoo: () => yahoo(), nasdaq: () => ({ data: { announcement: "Earnings announcement* for SOFI: Oct 27, 2026" } }), search: () => searchFixture, ...over,
   };
   const resp = (body, status = 200, headers = {}) => new Response(typeof body === "string" ? body : JSON.stringify(body), { status, headers });
   return async (url) => {
@@ -59,7 +59,17 @@ export function mockFetch(over = {}) {
     if (url.includes("fc.yahoo.com")) return resp("", 404, { "set-cookie": "A3=abc; Path=/" });
     if (url.includes("getcrumb")) return resp("crumbXYZ");
     if (url.includes("quoteSummary")) return pick("yahoo");
+    if (url.includes("/finance/search")) return pick("search");
     if (url.includes("nasdaq.com")) return pick("nasdaq");
     return resp("unknown", 404);
   };
 }
+
+export const searchFixture = { quotes: [
+  { symbol: "SOFI", shortname: "SoFi Technologies, Inc.", longname: "SoFi Technologies, Inc.", quoteType: "EQUITY", exchange: "NMS", exchDisp: "NASDAQ" },
+  { symbol: "SOFX", shortname: "Defiance Daily Target 2X Long SOFI", quoteType: "ETF", exchange: "NGM", exchDisp: "NASDAQ" },
+  { symbol: "SOF.L", shortname: "Some London Listing", quoteType: "EQUITY", exchange: "LSE", exchDisp: "London" },
+  { symbol: "SOFIW", shortname: "warrant", quoteType: "WARRANT", exchange: "NMS" },
+  { symbol: "BRK-B", shortname: "Berkshire Hathaway Inc. Class B", quoteType: "EQUITY", exchange: "NYQ", exchDisp: "NYSE" },
+  { symbol: "^SPX", shortname: "S&P 500", quoteType: "INDEX", exchange: "SNP", exchDisp: "SNP" },
+] };

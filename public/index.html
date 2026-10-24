@@ -20,9 +20,11 @@
   </header>
 
   <form class="ticket" id="form" autocomplete="off">
-    <div class="field grow">
-      <label for="ticker">Ticker</label>
-      <input id="ticker" name="ticker" placeholder="SOFI" maxlength="10" autocapitalize="characters" spellcheck="false" required>
+    <div class="field grow combo">
+      <label for="ticker">Ticker or company</label>
+      <input id="ticker" name="ticker" placeholder="SOFI or SoFi" maxlength="40" autocapitalize="characters" spellcheck="false" required
+        role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="tickerList">
+      <ul class="suggest" id="tickerList" role="listbox" aria-label="Matching tickers" hidden></ul>
     </div>
     <div class="field">
       <label for="portfolio">Portfolio value ($, optional)</label>
