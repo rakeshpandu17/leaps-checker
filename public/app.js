@@ -1,13 +1,17 @@
 import { analyze } from "./scoring.js";
+import { UNIVERSE } from "./universe.js";
 
 const $ = (id) => document.getElementById(id);
 const PREFS = "leaps-go-prefs-v1";
+const IDEA_BUDGET = 0.03; // one contract may cost at most 3% of the portfolio
+const IDEA_LIMIT = 20;
 const LABEL = { pass: "Pass", warn: "Caution", fail: "Fail", info: "Info" };
 const BADGE = { go: "Go", wait: "Wait", nogo: "No-go" };
 
 let data = null;
 
 const fmt$ = (x) => (x == null ? "n/a" : "$" + x.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+const fmt0 = (x) => "$" + Math.round(x).toLocaleString("en-US");
 const fmtPct = (x, d = 1) => (x == null ? "n/a" : (x >= 0 ? "+" : "") + x.toFixed(d) + "%");
 const fmtDate = (iso) => new Date(iso + "T00:00:00Z").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
 const fmtBig = (x) => {
@@ -60,7 +64,21 @@ function setStatus(msg, isError = false) {
   s.className = "status" + (isError ? " error" : "");
 }
 
-async function run(ticker) {
+const cache = new Map(); // ticker -> { at, promise }
+const CACHE_MS = 5 * 60 * 1000;
+
+function fetchAnalysis(ticker) {
+  const hit = cache.get(ticker);
+  if (hit && Date.now() - hit.at < CACHE_MS) return hit.promise;
+  const promise = fetch(`/api/analyze?ticker=${encodeURIComponent(ticker)}`)
+    .then((res) => res.json().catch(() => ({ ok: false, error: `Server error (${res.status}).` })))
+    .catch((e) => ({ ok: false, error: `Couldn't reach the data service: ${e.message}` }));
+  cache.set(ticker, { at: Date.now(), promise });
+  promise.then((b) => { if (!b.ok) cache.delete(ticker); });
+  return promise;
+}
+
+async function run(ticker, fromIdeas = false) {
   ticker = String(ticker || "").trim().toUpperCase();
   if (!ticker) return;
   $("ticker").value = ticker;
@@ -68,8 +86,7 @@ async function run(ticker) {
   $("earn").value = "";
   setStatus(`Loading ${ticker}: price, LEAPS chain, earnings date and company data…`);
   try {
-    const res = await fetch(`/api/analyze?ticker=${encodeURIComponent(ticker)}`);
-    const body = await res.json().catch(() => ({ ok: false, error: `Server error (${res.status}).` }));
+    const body = await fetchAnalysis(ticker);
     if (!body.ok) {
       data = null;
       $("result").hidden = true;
@@ -83,6 +100,7 @@ async function run(ticker) {
     history.replaceState(null, "", url);
     savePrefs({ last: ticker });
     render();
+    if (fromIdeas) $("result").scrollIntoView({ behavior: "smooth", block: "start" });
   } catch (e) {
     setStatus(`Couldn't reach the data service: ${e.message}`, true);
   } finally {
@@ -92,7 +110,14 @@ async function run(ticker) {
 
 function render() {
   if (!data) return;
-  const a = analyze(data, settings());
+  const st = settings();
+  const budget = st.portfolio ? st.portfolio * IDEA_BUDGET : 0;
+  let a = analyze(data, { ...st, maxCost: budget });
+  let budgetNote = budget && a.best ? `Contract chosen to cost no more than ${fmt$(budget)} (3% of your portfolio).` : "";
+  if (a.overBudget || (budget && !a.best)) {
+    a = analyze(data, st);
+    if (a.best) budgetNote = `No qualifying contract costs under ${fmt$(budget)} (3% of your portfolio), so the best overall contract is shown.`;
+  }
   const v = a.verdict;
 
   const box = $("verdict");
@@ -185,7 +210,10 @@ function render() {
       el("td", {}, c.oi.toLocaleString("en-US"))));
   }
 
-  $("notes").textContent = data.notes.length ? "Data notes: " + data.notes.join(" ") : "";
+  const p = a.projection;
+  if (p) row("If stock hits " + fmt$(p.target), `${fmtPct(p.optionReturn, 0)} by expiry (${p.basis})`);
+  const notes = [budgetNote, data.notes.length ? "Data notes: " + data.notes.join(" ") : ""].filter(Boolean);
+  $("notes").textContent = notes.join(" ");
   $("result").hidden = false;
 }
 
@@ -199,8 +227,112 @@ $("quick").addEventListener("click", (e) => {
   if (t) run(t.dataset.t);
 });
 for (const id of ["portfolio", "contracts"]) $(id).addEventListener("input", () => { savePrefs(); render(); });
+let ideasTimer = null;
+$("portfolio").addEventListener("input", () => {
+  clearTimeout(ideasTimer);
+  ideasTimer = setTimeout(() => screen(), 900);
+});
+$("ideasRefresh").addEventListener("click", () => screen(true));
+$("ideasBody").addEventListener("click", (e) => {
+  const tr = e.target.closest("tr[data-t]");
+  if (tr) run(tr.dataset.t, true);
+});
+$("ideasBody").addEventListener("keydown", (e) => {
+  const tr = e.target.closest("tr[data-t]");
+  if (tr && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); run(tr.dataset.t, true); }
+});
 $("earn").addEventListener("change", render);
+
+// ---------- idea screener ----------
+
+let screenRun = 0;
+
+async function pool(items, limit, fn) {
+  let i = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (i < items.length) await fn(items[i++]);
+  });
+  await Promise.all(workers);
+}
+
+async function screen(force = false) {
+  const pv = settings().portfolio;
+  const box = $("ideas");
+  const id = ++screenRun;
+  if (!pv) { box.hidden = true; $("quick").hidden = false; return; }
+  if (force) cache.clear();
+  const budget = pv * IDEA_BUDGET;
+  box.hidden = false;
+  $("quick").hidden = true;
+  $("ideasTitle").textContent = `Up to ${IDEA_LIMIT} LEAPS ideas for a ${fmt0(pv)} portfolio`;
+  $("ideasSub").textContent = `One contract must cost ${fmt0(budget)} or less (3% of the portfolio).`;
+  $("ideasBody").replaceChildren();
+  const status = (t) => { if (id === screenRun) $("ideasStatus").textContent = t; };
+  const progress = (f) => { if (id === screenRun) { $("ideasProgress").hidden = f >= 1; $("ideasBar").style.width = Math.round(f * 100) + "%"; } };
+  progress(0);
+  status("Getting prices…");
+
+  // 1. Prices first, to skip stocks whose deep in-the-money calls can't fit the budget.
+  const prices = {};
+  for (let i = 0; i < UNIVERSE.length; i += 40) {
+    try {
+      const r = await fetch(`/api/quotes?tickers=${UNIVERSE.slice(i, i + 40).join(",")}`).then((x) => x.json());
+      Object.assign(prices, r.quotes || {});
+    } catch (e) {}
+    if (id !== screenRun) return;
+  }
+  // A 0.75-delta LEAPS usually costs at least about a quarter of the share price per share.
+  const affordable = UNIVERSE.filter((t) => !prices[t] || prices[t].price * 100 * 0.22 <= budget);
+  if (!affordable.length) {
+    progress(1);
+    status(`No stock on the list has LEAPS that fit ${fmt$(budget)}. Try a larger portfolio value.`);
+    return;
+  }
+
+  // 2. Full check on each affordable ticker.
+  const ideas = [];
+  let done = 0;
+  status(`Checking ${affordable.length} stocks and ETFs that could fit…`);
+  await pool(affordable, 4, async (t) => {
+    if (id !== screenRun) return;
+    const d = await fetchAnalysis(t);
+    done++;
+    if (id !== screenRun) return;
+    progress(done / affordable.length);
+    status(`Checked ${done} of ${affordable.length}…`);
+    if (!d.ok) return;
+    const a = analyze(d, { ...settings(), maxCost: budget, contracts: 1 });
+    if (!a.best || a.verdict.level === "nogo" || !a.projection) return;
+    ideas.push({ t, d, a });
+    renderIdeas(ideas, pv);
+  });
+  if (id !== screenRun) return;
+  progress(1);
+  status(ideas.length
+    ? `${Math.min(ideas.length, IDEA_LIMIT)} idea${ideas.length === 1 ? "" : "s"} from ${affordable.length} checked. Prices are about 15 minutes delayed.`
+    : `None of the ${affordable.length} affordable names passed the checks right now. Try a larger portfolio value.`);
+}
+
+function renderIdeas(ideas, pv) {
+  ideas.sort((x, y) => y.a.projection.annualized - x.a.projection.annualized);
+  const tb = $("ideasBody");
+  tb.replaceChildren();
+  ideas.slice(0, IDEA_LIMIT).forEach(({ t, d, a }, i) => {
+    const b = a.best, p = a.projection, cost = b.mid * 100;
+    tb.append(el("tr", { "data-t": t, tabindex: "0", title: `Open the full ${t} check` },
+      el("td", {}, String(i + 1)),
+      el("td", { class: "tk" }, t),
+      el("td", {}, el("span", { class: "pill " + (a.verdict.level === "go" ? "pass" : "warn") }, BADGE[a.verdict.level])),
+      el("td", {}, `${fmtDate(b.expiry)} $${b.strike}`),
+      el("td", {}, fmt$(cost)),
+      el("td", {}, (cost / pv * 100).toFixed(1) + "%"),
+      el("td", {}, b.delta.toFixed(2)),
+      el("td", {}, fmtPct(b.breakevenPct)),
+      el("td", { class: p.annualized >= 0 ? "up" : "down" }, fmtPct(p.annualized, 0) + (p.basis === "analyst target" ? "" : " †"))));
+  });
+}
 
 const prefs = loadPrefs();
 const start = new URL(location.href).searchParams.get("t") || prefs.last || "SOFI";
 run(start);
+screen();

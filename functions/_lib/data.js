@@ -169,12 +169,35 @@ export function normalizeYahoo(json, todayISO) {
   };
 }
 
+// Reuse one Yahoo session per Worker instance (per fetch function) for 30 minutes,
+// so screening many tickers doesn't request a new cookie and crumb each time.
+const yahooSessions = new WeakMap();
+const SESSION_MS = 30 * 60 * 1000;
+
+async function getYahooSession(fetchFn, fresh = false) {
+  const hit = yahooSessions.get(fetchFn);
+  if (!fresh && hit && Date.now() - hit.at < SESSION_MS) return hit.session;
+  const session = yahooSession(fetchFn);
+  yahooSessions.set(fetchFn, { session, at: Date.now() });
+  session.catch(() => yahooSessions.delete(fetchFn));
+  return session;
+}
+
 async function fetchYahoo(fetchFn, ticker, todayISO) {
-  const { cookie, crumb } = await yahooSession(fetchFn);
   const modules = "price,summaryDetail,financialData,defaultKeyStatistics,calendarEvents,assetProfile";
   const ysym = ticker.replace(/\./g, "-");
-  const url = `https://query2.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(ysym)}?modules=${modules}&crumb=${encodeURIComponent(crumb)}`;
-  const json = await getJSON(fetchFn, url, { headers: { Cookie: cookie } });
+  const attempt = async (fresh) => {
+    const { cookie, crumb } = await getYahooSession(fetchFn, fresh);
+    const url = `https://query2.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(ysym)}?modules=${modules}&crumb=${encodeURIComponent(crumb)}`;
+    return getJSON(fetchFn, url, { headers: { Cookie: cookie } });
+  };
+  let json;
+  try {
+    json = await attempt(false);
+  } catch (e) {
+    if (e.status !== 401 && e.status !== 403) throw e;
+    json = await attempt(true);
+  }
   return normalizeYahoo(json, todayISO);
 }
 
@@ -196,6 +219,24 @@ async function fetchNasdaqEarnings(fetchFn, ticker, todayISO) {
     headers: { Origin: "https://www.nasdaq.com", Referer: "https://www.nasdaq.com/" },
   });
   return parseNasdaqEarnings(json, todayISO);
+}
+
+// ---------- Batch quotes (for the idea screener) ----------
+
+export const MAX_BATCH = 40;
+
+export async function gatherQuotes(tickers, { fetchFn = fetch } = {}) {
+  const list = [...new Set(tickers.map(cleanTicker).filter(Boolean))].slice(0, MAX_BATCH);
+  const results = await Promise.allSettled(list.map((t) => getJSON(fetchFn, `${CBOE}/quotes/${cboeSymbol(t)}.json`)));
+  const quotes = {};
+  list.forEach((t, i) => {
+    const r = results[i];
+    if (r.status === "fulfilled") {
+      const q = normalizeQuote(r.value);
+      if (q.price) quotes[t] = { price: q.price, iv30: q.iv30 };
+    }
+  });
+  return { ok: true, quotes };
 }
 
 // ---------- Orchestration ----------

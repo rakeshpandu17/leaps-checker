@@ -86,3 +86,23 @@ test("Yahoo down still works, earnings from Nasdaq", async () => {
   assert.equal(d.earnings.source, "Nasdaq");
   analyze(d);
 });
+
+test("budget limits the contract and projection ranks it", async () => {
+  const d = await get();
+  const free = analyze(d);
+  const capped = analyze(d, { maxCost: 450 });
+  assert.ok(capped.best.mid * 100 <= 450, `cost ${capped.best.mid * 100}`);
+  assert.notEqual(capped.best.symbol, free.best.symbol);
+  assert.equal(capped.projection.basis, "analyst target");
+  assert.ok(isFinite(capped.projection.annualized));
+  const tooSmall = analyze(d, { maxCost: 50 });
+  assert.equal(tooSmall.best, null);
+  assert.equal(tooSmall.overBudget, true);
+});
+
+test("batch quotes", async () => {
+  const { gatherQuotes } = await import("../functions/_lib/data.js");
+  const r = await gatherQuotes(["sofi", "AAPL", "bad ticker!"], { fetchFn: mockFetch() });
+  assert.deepEqual(Object.keys(r.quotes), ["SOFI", "AAPL"]);
+  assert.equal(r.quotes.SOFI.price, 14.77);
+});

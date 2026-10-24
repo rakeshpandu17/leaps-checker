@@ -37,8 +37,29 @@
       <button type="button" data-t="AAPL">AAPL</button>
       <button type="button" data-t="NVDA">NVDA</button>
       <button type="button" data-t="SPY">SPY</button>
+      <span class="hint">Enter a portfolio value to get LEAPS ideas that fit it.</span>
     </div>
   </form>
+
+  <section class="card ideas" id="ideas" hidden>
+    <div class="ideas-head">
+      <div>
+        <span class="eyebrow">Try: LEAPS ideas for your portfolio</span>
+        <h2 id="ideasTitle"></h2>
+        <p class="sub" id="ideasSub"></p>
+      </div>
+      <button type="button" id="ideasRefresh">Refresh</button>
+    </div>
+    <div class="progress" id="ideasProgress" hidden><div class="bar" id="ideasBar"></div></div>
+    <p class="sub" id="ideasStatus" aria-live="polite"></p>
+    <div class="tbl-wrap">
+      <table class="ideas-tbl">
+        <thead><tr><th>#</th><th>Ticker</th><th>Verdict</th><th>Contract</th><th>Cost</th><th>% of portfolio</th><th>Delta</th><th>Break-even</th><th>Projected / yr</th></tr></thead>
+        <tbody id="ideasBody"></tbody>
+      </table>
+    </div>
+    <p class="foot-note">Ranked by projected yearly return of the call if the stock reaches the analysts' average price target by expiry (marked † where there is no target, as for ETFs, and 10% a year growth is assumed). Only contracts that pass the delta, time and liquidity rules and cost no more than 3% of your portfolio are shown; No-go names are left out. This is a starting list, not a recommendation. Click a row for the full check.</p>
+  </section>
 
   <section id="status" class="status" aria-live="polite"></section>
 

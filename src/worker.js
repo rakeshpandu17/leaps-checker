@@ -1,12 +1,16 @@
-// Cloudflare Workers entry: static files come from public/ (assets), /api/analyze runs the data function.
-import { onRequestGet } from "../functions/api/analyze.js";
+// Cloudflare Workers entry: static files come from public/ (assets), /api/* runs the data functions.
+import { onRequestGet as analyze } from "../functions/api/analyze.js";
+import { onRequestGet as quotes } from "../functions/api/quotes.js";
+
+const ROUTES = { "/api/analyze": analyze, "/api/quotes": quotes };
 
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
-    if (url.pathname === "/api/analyze") {
+    const handler = ROUTES[url.pathname];
+    if (handler) {
       if (request.method !== "GET") return new Response("Method not allowed", { status: 405 });
-      return onRequestGet({ request, waitUntil: (p) => ctx.waitUntil(p) });
+      return handler({ request, waitUntil: (p) => ctx.waitUntil(p) });
     }
     return env.ASSETS.fetch(request);
   },

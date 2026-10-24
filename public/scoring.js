@@ -286,7 +286,8 @@ export function analyze(data, settings = {}) {
   const trend = trendInfo(data.history || [], S);
   const ivc = ivContext(data.iv30, data.history || []);
   const enriched = enrichCalls(data.calls || [], S, today);
-  const ranked = rankCandidates(enriched);
+  const allRanked = rankCandidates(enriched);
+  const ranked = settings.maxCost > 0 ? allRanked.filter((c) => c.mid * 100 <= settings.maxCost) : allRanked;
   const best = ranked[0] || null;
 
   const checks = [];
@@ -416,7 +417,32 @@ export function analyze(data, settings = {}) {
     add(8, "Exit plan", "Set before you buy", "info", "No contract to plan around.");
   }
 
-  return { checks, best, alternatives: pickAlternatives(ranked, best), trend, ivc, verdict: verdict(checks, best, data) };
+  return {
+    checks, best, alternatives: pickAlternatives(ranked, best), trend, ivc,
+    projection: projection(data, best),
+    overBudget: settings.maxCost > 0 && !best && allRanked.length > 0,
+    verdict: verdict(checks, best, data),
+  };
+}
+
+// Projected outcome at expiry if the stock reaches the analysts' mean target
+// (or, with no target, grows 10% a year). Used to rank ideas; not a forecast.
+export function projection(data, best) {
+  if (!best) return null;
+  const f = data.fundamentals || {};
+  const S = data.price;
+  const years = best.dte / 365;
+  const hasTarget = f.targetMean > 0 && !data.isIndex && f.quoteType !== "ETF";
+  const target = hasTarget ? f.targetMean : S * Math.pow(1.1, years);
+  const value = Math.max(0, target - best.strike);
+  const optionReturn = (value / best.mid - 1) * 100;
+  return {
+    basis: hasTarget ? "analyst target" : "10% a year",
+    target,
+    stockReturn: (target / S - 1) * 100,
+    optionReturn,
+    annualized: optionReturn > -100 ? (Math.pow(1 + optionReturn / 100, 1 / Math.max(years, 0.5)) - 1) * 100 : -100,
+  };
 }
 
 function pickAlternatives(ranked, best) {
