@@ -115,6 +115,10 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .tip.inline { display: inline-flex; vertical-align: baseline; }
 .details .tip-box { color: var(--bg); }
 .tip:hover .tip-box, .tip-btn:focus + .tip-box { display: block; }
+#altCard { position: relative; }
+.th-tip { display: inline-flex; align-items: center; gap: 5px; }
+.th-tip .tip-btn { width: 16px; height: 16px; font-size: .62rem; letter-spacing: 0; text-transform: none; }
+.tip-box.float { display: block; }
 .override { display: grid; gap: 4px; padding-top: 8px; border-top: 1px dashed var(--line); }
 .override input { max-width: 200px; }
 

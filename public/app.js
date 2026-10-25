@@ -586,3 +586,29 @@ const prefs = loadPrefs();
 const start = new URL(location.href).searchParams.get("t") || prefs.last || "SOFI";
 run(start);
 screen();
+
+// Column-header tooltips for the alternatives table. The table scrolls sideways, which would clip a
+// tooltip inside it, so one shared box sits on the card and is placed under the hovered button.
+(() => {
+  const card = $("altCard"), box = $("altTip");
+  let pinned = null;
+  const show = (btn) => {
+    box.textContent = btn.dataset.tip;
+    box.hidden = false;
+    const c = card.getBoundingClientRect(), b = btn.getBoundingClientRect();
+    const left = Math.min(Math.max(8, b.left - c.left - 12), c.width - box.offsetWidth - 8);
+    box.style.left = left + "px";
+    box.style.top = (b.bottom - c.top + 6) + "px";
+  };
+  const hide = () => { box.hidden = true; pinned = null; };
+  card.querySelectorAll("thead .tip-btn").forEach((btn) => {
+    btn.setAttribute("aria-describedby", "altTip");
+    btn.addEventListener("mouseenter", () => show(btn));
+    btn.addEventListener("mouseleave", () => { if (pinned !== btn) hide(); });
+    btn.addEventListener("focus", () => show(btn));
+    btn.addEventListener("blur", hide);
+    btn.addEventListener("click", () => { if (pinned === btn) hide(); else { show(btn); pinned = btn; } });
+  });
+  card.querySelector(".tbl-wrap").addEventListener("scroll", hide, { passive: true });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") hide(); });
+})();
