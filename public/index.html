@@ -82,11 +82,12 @@
       </div>
       <ul class="reasons" id="vReasons"></ul>
       <p class="diff" id="vDiff" hidden></p>
+      <p class="diff pick" id="vPick" hidden><span id="vPickText"></span> <button type="button" id="pickReset">Back to the best fit</button></p>
     </div>
 
     <div class="grid2">
       <article class="card" id="bestCard">
-        <span class="eyebrow">Best-fitting contract</span>
+        <span class="eyebrow" id="bestEyebrow">Best-fitting contract</span>
         <h3 id="bestTitle"></h3>
         <dl class="kv" id="bestKv"></dl>
       </article>
@@ -110,8 +111,9 @@
 
     <section class="card" id="altCard">
       <span class="eyebrow">Other contracts that qualify</span>
+      <p class="sub">Click a contract to run all eight checks on it.</p>
       <div class="tbl-wrap">
-        <table>
+        <table class="pick-tbl">
           <thead><tr><th><span class="th-tip">Expiry<button type="button" class="tip-btn" aria-label="What is Expiry?" data-tip="The date the option expires. After this date the contract is worthless if not sold, so a later date gives the stock more time to rise.">?</button></span></th><th><span class="th-tip">Strike<button type="button" class="tip-btn" aria-label="What is Strike?" data-tip="The price at which this call lets you buy the stock. A strike below today&#x27;s price means the call already has built-in value (it is in the money).">?</button></span></th><th><span class="th-tip">Mid<button type="button" class="tip-btn" aria-label="What is Mid?" data-tip="The halfway point between the bid and ask, a fair estimate of the price per share. One contract covers 100 shares, so the cost is about 100 times this.">?</button></span></th><th><span class="th-tip">Delta<button type="button" class="tip-btn" aria-label="What is Delta?" data-tip="Roughly how much the option&#x27;s price moves when the stock moves $1. A delta of 0.80 means about 80 cents. Higher delta behaves more like owning the stock.">?</button></span></th><th><span class="th-tip">Break-even<button type="button" class="tip-btn" aria-label="What is Break-even?" data-tip="How much the stock must rise by expiry for you to get back what you paid. Lower is better.">?</button></span></th><th><span class="th-tip">Time cost / yr<button type="button" class="tip-btn" aria-label="What is Time cost / yr?" data-tip="The extra you pay above the call&#x27;s built-in value, as a share of the stock price per year. It slowly melts away as expiry nears, so lower is better.">?</button></span></th><th><span class="th-tip">Spread<button type="button" class="tip-btn" aria-label="What is Spread?" data-tip="The gap between the bid and ask, as a share of the price. A small spread means you lose less when you buy and later sell.">?</button></span></th><th><span class="th-tip">OI<button type="button" class="tip-btn" aria-label="What is OI?" data-tip="Open interest: how many of these contracts people hold right now. More means it is easier to trade at a fair price.">?</button></span></th></tr></thead>
           <tbody id="altBody"></tbody>
         </table>

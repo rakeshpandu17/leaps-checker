@@ -16,6 +16,8 @@ let data = null;
 // What the ideas list showed for each ticker, so the full check can explain a different live verdict.
 const ideaInfo = new Map();
 let ideaRef = null;
+// The option symbol the user picked from "Other contracts that qualify", or null for the best fit.
+let pickedSymbol = null;
 
 const fmt$ = (x) => (x == null ? "n/a" : "$" + x.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
 const fmt0 = (x) => "$" + Math.round(x).toLocaleString("en-US");
@@ -89,6 +91,7 @@ async function run(ticker, fromIdeas = false) {
   ticker = String(ticker || "").trim().toUpperCase();
   if (!ticker) return;
   ideaRef = fromIdeas ? ideaInfo.get(ticker) || null : null;
+  pickedSymbol = null;
   $("ticker").value = ticker;
   $("go").disabled = true;
   $("earn").value = "";
@@ -141,10 +144,10 @@ function render() {
   if (!data) return;
   const st = settings();
   const budget = st.portfolio ? st.portfolio * IDEA_BUDGET : 0;
-  let a = analyze(data, { ...st, maxCost: budget });
-  let budgetNote = budget && a.best ? `Contract chosen to cost no more than ${fmt$(budget)} (3% of your portfolio).` : "";
+  let a = analyze(data, { ...st, maxCost: budget, pick: pickedSymbol });
+  let budgetNote = budget && a.best && !a.picked ? `Contract chosen to cost no more than ${fmt$(budget)} (3% of your portfolio).` : "";
   if (a.overBudget || (budget && !a.best)) {
-    a = analyze(data, st);
+    a = analyze(data, { ...st, pick: pickedSymbol });
     if (a.best) budgetNote = `No qualifying contract costs under ${fmt$(budget)} (3% of your portfolio), so the best overall contract is shown.`;
   }
   const v = a.verdict;
@@ -164,7 +167,7 @@ function render() {
   $("vDiff").replaceChildren();
   $("vDiff").hidden = true;
   const nb = a.best, same = !!nb && nb.symbol === ideaRef?.symbol;
-  if (ideaRef && ideaRef.t === data.ticker && (ideaRef.level !== v.level || !same)) {
+  if (!a.picked && ideaRef && ideaRef.t === data.ticker && (ideaRef.level !== v.level || !same)) {
     const changed = ideaRef.level !== v.level ? ` The verdict is now ${BADGE[v.level]}.` : "";
     $("vDiff").append(
       el("strong", {}, "Why this differs from the ideas list: "),
@@ -305,12 +308,21 @@ function render() {
           details)));
   }
 
+  // the contract the user picked, if any
+  $("vPick").hidden = !a.picked;
+  $("bestEyebrow").textContent = a.picked ? "Your selected contract" : "Best-fitting contract";
+  if (a.picked) {
+    const t = a.topPick;
+    $("vPickText").textContent = `These checks are for the ${fmtDate(a.best.expiry)} $${a.best.strike} call you picked` +
+      (t ? `. The best fit is the ${fmtDate(t.expiry)} $${t.strike} call.` : ".");
+  }
+
   // alternatives
   const tb = $("altBody");
   tb.replaceChildren();
   $("altCard").hidden = !a.alternatives.length;
   for (const c of a.alternatives) {
-    tb.append(el("tr", {},
+    tb.append(el("tr", { "data-sym": c.symbol, tabindex: "0", title: `Run the checks on the ${fmtDate(c.expiry)} $${c.strike} call` },
       el("td", {}, fmtDate(c.expiry)),
       el("td", {}, "$" + c.strike),
       el("td", {}, fmt$(c.mid)),
@@ -508,6 +520,22 @@ function setIdeasOpen(open) {
   $("ideasToggle").textContent = open ? "Hide list" : "Show list";
 }
 $("earn").addEventListener("change", render);
+
+// Picking a contract from "Other contracts that qualify" re-runs every check on it.
+function pickContract(sym) {
+  pickedSymbol = sym;
+  render();
+  $("verdict").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+$("altBody").addEventListener("click", (e) => {
+  const tr = e.target.closest("tr[data-sym]");
+  if (tr) pickContract(tr.dataset.sym);
+});
+$("altBody").addEventListener("keydown", (e) => {
+  const tr = e.target.closest("tr[data-sym]");
+  if (tr && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); pickContract(tr.dataset.sym); }
+});
+$("pickReset").addEventListener("click", () => pickContract(null));
 
 // ---------- idea screener ----------
 

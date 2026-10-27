@@ -71,8 +71,11 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .ideas.collapsed .ideas-head h2 { font-size: 1.1rem; }
 .progress { height: 6px; background: var(--info-bg); border-radius: 999px; overflow: hidden; }
 .progress .bar { height: 100%; width: 0; background: var(--accent); transition: width .2s; }
-.ideas-tbl tbody tr { cursor: pointer; }
-.ideas-tbl tbody tr:hover, .ideas-tbl tbody tr:focus-visible { background: var(--accent-soft); outline: none; }
+.ideas-tbl tbody tr, .pick-tbl tbody tr { cursor: pointer; }
+.ideas-tbl tbody tr:hover, .ideas-tbl tbody tr:focus-visible,
+.pick-tbl tbody tr:hover, .pick-tbl tbody tr:focus-visible { background: var(--accent-soft); outline: none; }
+.diff.pick { background: var(--accent-soft); display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.diff.pick button { padding: 5px 12px; }
 .ideas-tbl td.tk { font-weight: 600; }
 .ideas-tbl th:nth-child(2), .ideas-tbl td:nth-child(2), .ideas-tbl th:nth-child(3), .ideas-tbl td:nth-child(3) { text-align: left; }
 .ideas-tbl td.up { color: var(--pass); font-weight: 600; }

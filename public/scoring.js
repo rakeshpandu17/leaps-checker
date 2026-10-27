@@ -288,7 +288,9 @@ export function analyze(data, settings = {}) {
   const enriched = enrichCalls(data.calls || [], S, today);
   const allRanked = rankCandidates(enriched);
   const ranked = settings.maxCost > 0 ? allRanked.filter((c) => c.mid * 100 <= settings.maxCost) : allRanked;
-  const best = ranked[0] || null;
+  // settings.pick (an option symbol) scores that contract instead of the top-ranked one.
+  const picked = settings.pick ? allRanked.find((c) => c.symbol === settings.pick) || null : null;
+  const best = picked || ranked[0] || null;
 
   const checks = [];
   const add = (id, title, target, state, summary, details = []) => checks.push({ id, title, target, state, summary, details });
@@ -448,9 +450,9 @@ export function analyze(data, settings = {}) {
   }
 
   return {
-    checks, best, alternatives: pickAlternatives(ranked, best), trend, ivc,
+    checks, best, picked: !!picked, topPick: ranked[0] || null, alternatives: pickAlternatives(ranked, best), trend, ivc,
     projection: projection(data, best),
-    overBudget: settings.maxCost > 0 && !best && allRanked.length > 0,
+    overBudget: settings.maxCost > 0 && !ranked.length && allRanked.length > 0,
     verdict: verdict(checks, best, data),
   };
 }

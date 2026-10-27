@@ -80,6 +80,18 @@ test("news: tags headlines, drops old ones, flags risk in the stock check", asyn
   assert.ok(a.checks[5].details.some((x) => /downgrades/.test(x)));
 });
 
+test("picking another qualifying contract scores that one", async () => {
+  const d = await get();
+  const a = analyze(d);
+  const alt = a.alternatives[0];
+  const b = analyze(d, { pick: alt.symbol });
+  assert.equal(b.best.symbol, alt.symbol);
+  assert.equal(b.picked, true);
+  assert.equal(b.topPick.symbol, a.best.symbol);
+  assert.ok(b.alternatives.some((c) => c.symbol === a.best.symbol));
+  assert.equal(analyze(d, { pick: "NOPE" }).best.symbol, a.best.symbol);
+});
+
 test("calm IV, earnings far away, uptrend: GO", async () => {
   const far = Date.parse("2027-01-28T12:00:00Z") / 1000;
   const d = await get({ yahoo: () => yahoo(far), options: () => chain("SOFI", 14.77, 0.42), quotes: () => ({ data: { current_price: 14.77, iv30: 40 } }), historical: () => history(14.77, 500, 0.0012, 0.028) });
