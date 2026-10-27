@@ -2,14 +2,11 @@ name: Daily LEAPS scans
 
 on:
   schedule:
-    # Two scans each weekday while the market is open, when option quotes are tightest (times in UTC):
-    # morning at 15:00 (11 am EDT / 10 am EST, after the opening rush) and
-    # afternoon at 19:30 (3:30 pm EDT / 2:30 pm EST; the scan takes about 25 minutes, so it ends before the close).
+    # Two scans each weekday (times in UTC):
+    # morning at 15:00 (11 am EDT / 10 am EST, after the opening rush), while option quotes are tight, and
+    # evening at 23:00 (7 pm EDT / 6 pm EST), after most after-the-close earnings reports.
     - cron: "0 15 * * 1-5"
-    - cron: "30 19 * * 1-5"
-    # Backup for the afternoon scan at 21:30, because GitHub sometimes starts scheduled runs late or skips them.
-    # It does nothing if an afternoon scan from today is already on main.
-    - cron: "30 21 * * 1-5"
+    - cron: "0 23 * * 1-5"
   workflow_dispatch:
 
 permissions:
@@ -28,21 +25,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Skip the backup run if today's afternoon scan is already on main
-        id: check
-        if: github.event.schedule == '30 21 * * 1-5'
-        run: |
-          git fetch -q origin main
-          last=$(git show origin/main:public/data/scan.json | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{console.log(JSON.parse(s).generatedAt)}catch{console.log("")}})')
-          if [[ "$last" > "$(date -u +%Y-%m-%d)T19:00" ]]; then echo "skip=true" >> "$GITHUB_OUTPUT"; echo "Today's afternoon scan already exists ($last)."; fi
       - name: Scan about 330 tickers
-        if: steps.check.outputs.skip != 'true'
         run: node scripts/nightly-scan.mjs
         env:
           # Fetch through the live site, because Cboe blocks most requests from GitHub's runners.
           SCAN_VIA: https://leaps-startegy-checker.rakeshpandu17.workers.dev
       - name: Commit the new snapshot
-        if: steps.check.outputs.skip != 'true'
         run: |
           git config user.name "leaps-scan-bot"
           git config user.email "actions@users.noreply.github.com"
