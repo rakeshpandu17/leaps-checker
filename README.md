@@ -41,7 +41,7 @@ Works as either a Cloudflare Worker (uses `wrangler.jsonc` + `src/worker.js`) or
 
 ## Nightly scan
 
-`.github/workflows/nightly-scan.yml` runs `scripts/nightly-scan.mjs` each weekday at 22:30 UTC (after the US close).
+`.github/workflows/nightly-scan.yml` runs `scripts/nightly-scan.mjs` twice each weekday while the market is open, at 15:00 and 19:30 UTC, when option quotes are tight. A backup run at 21:30 UTC is skipped when that day's afternoon scan already exists.
 It fetches data for about 330 tickers in `scripts/scan-universe.mjs` and commits a compact snapshot to
 `public/data/scan.json`; the push redeploys the site. The "LEAPS ideas" list ranks that snapshot in the browser
 (falling back to a live scan of `public/universe.js` if the snapshot is missing or over 5 days old).

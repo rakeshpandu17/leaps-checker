@@ -61,7 +61,7 @@
         <tbody id="ideasBody"></tbody>
       </table>
     </div>
-    <p class="foot-note">Ranked by projected yearly return of the call if the stock reaches the analysts' average price target by expiry (marked † where there is no target, as for ETFs, and 10% a year growth is assumed). Only contracts that pass the delta, time and liquidity rules and cost no more than 3% of your portfolio are shown; No-go names are left out. Ideas come from a scan of about 330 actively traded optionable stocks and ETFs, run each weekday after the close, so prices in this list can be up to a day old. This is a starting list, not a recommendation. Click a row for the full check.</p>
+    <p class="foot-note">Ranked by projected yearly return of the call if the stock reaches the analysts' average price target by expiry (marked † where there is no target, as for ETFs, and 10% a year growth is assumed). Only contracts that pass the delta and time rules, have a tight market (bid-ask spread of 5% or less and at least 100 open contracts), and cost no more than 3% of your portfolio are shown; No-go names are left out. Ideas come from a scan of about 330 actively traded optionable stocks and ETFs, run twice each weekday while the market is open (mid-morning and shortly before the close), so prices in this list can be several hours old. Clicking a row re-checks it with the latest quotes, which can change the verdict. This is a starting list, not a recommendation. Click a row for the full check.</p>
   </section>
 
   <section id="status" class="status" aria-live="polite"></section>
@@ -76,6 +76,7 @@
         </div>
       </div>
       <ul class="reasons" id="vReasons"></ul>
+      <p class="diff" id="vDiff" hidden></p>
     </div>
 
     <div class="grid2">

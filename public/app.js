@@ -13,6 +13,9 @@ const LABEL = { pass: "Pass", warn: "Caution", fail: "Fail", info: "Info" };
 const BADGE = { go: "Go", wait: "Wait", nogo: "No-go" };
 
 let data = null;
+// What the ideas list showed for each ticker, so the full check can explain a different live verdict.
+const ideaInfo = new Map();
+let ideaRef = null;
 
 const fmt$ = (x) => (x == null ? "n/a" : "$" + x.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
 const fmt0 = (x) => "$" + Math.round(x).toLocaleString("en-US");
@@ -85,6 +88,7 @@ function fetchAnalysis(ticker) {
 async function run(ticker, fromIdeas = false) {
   ticker = String(ticker || "").trim().toUpperCase();
   if (!ticker) return;
+  ideaRef = fromIdeas ? ideaInfo.get(ticker) || null : null;
   $("ticker").value = ticker;
   $("go").disabled = true;
   $("earn").value = "";
@@ -136,6 +140,22 @@ function render() {
   ul.replaceChildren();
   const reasons = v.reasons.length ? v.reasons : ["All core checks pass. Keep it small and follow the exit plan."];
   for (const r of reasons) ul.append(el("li", {}, r));
+  $("vDiff").replaceChildren();
+  $("vDiff").hidden = true;
+  const nb = a.best, same = !!nb && nb.symbol === ideaRef?.symbol;
+  if (ideaRef && ideaRef.t === data.ticker && (ideaRef.level !== v.level || !same)) {
+    const changed = ideaRef.level !== v.level ? ` The verdict is now ${BADGE[v.level]}.` : "";
+    $("vDiff").append(
+      el("strong", {}, "Why this differs from the ideas list: "),
+      `the list used prices from ${ideaRef.when}, when the ${ideaRef.contract} call was ${BADGE[ideaRef.level]} at bid ${fmt$(ideaRef.bid)} / ask ${fmt$(ideaRef.ask)} ` +
+      `(spread ${ideaRef.spread.toFixed(1)}%, open interest ${ideaRef.oi.toLocaleString("en-US")}). ` +
+      (same
+        ? `Its latest quote is bid ${fmt$(nb.bid)} / ask ${fmt$(nb.ask)} (spread ${nb.spreadPct.toFixed(1)}%, open interest ${nb.oi.toLocaleString("en-US")}).${changed}`
+        : nb ? `With the latest quotes the ${fmtDate(nb.expiry)} $${nb.strike} call fits better.${changed}`
+            : `With the latest quotes no contract qualifies.${changed}`) +
+      ` This check uses the latest quotes, so go by it rather than the list.`);
+    $("vDiff").hidden = false;
+  }
 
   // best contract
   const b = a.best;
@@ -456,6 +476,12 @@ $("earn").addEventListener("change", render);
 
 let screenRun = 0;
 
+// An idea needs a priced, non-No-go contract with fully passing liquidity (spread 5% or less, open interest 100+),
+// because a thin contract's quote can swing enough by the time someone opens it to flip the verdict.
+function fitsIdeas(a) {
+  return !!(a.best && a.projection && a.verdict.level !== "nogo" && a.checks.find((c) => c.id === 5)?.state === "pass");
+}
+
 async function pool(items, limit, fn) {
   let i = 0;
   const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
@@ -480,8 +506,8 @@ async function screen(force = false) {
   const progress = (f) => { if (id === screenRun) { $("ideasProgress").hidden = f >= 1; $("ideasBar").style.width = Math.round(f * 100) + "%"; } };
   progress(0);
 
-  // Preferred: last night's scan of ~330 stocks, ranked instantly in the browser.
-  status("Loading last night's scan…");
+  // Preferred: the latest daily scan of ~330 stocks, ranked instantly in the browser.
+  status("Loading the latest scan…");
   const snap = await loadSnapshot(force);
   if (id !== screenRun) return;
   if (snap) {
@@ -492,15 +518,15 @@ async function screen(force = false) {
       if (s.price * 100 * 0.22 > budget) continue;
       const d = fromSnapshot(t, s, today);
       const a = analyze(d, { ...settings(), maxCost: budget, contracts: 1 });
-      if (!a.best || a.verdict.level === "nogo" || !a.projection) continue;
+      if (!fitsIdeas(a)) continue;
       ideas.push({ t, d, a });
     }
-    renderIdeas(ideas, pv);
-    progress(1);
     const when = new Date(snap.generatedAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+    renderIdeas(ideas, pv, when);
+    progress(1);
     status(ideas.length
-      ? `${Math.min(ideas.length, IDEA_LIMIT)} best of ${ideas.length} that fit, from ${snap.count} stocks and ETFs scanned at the close (${when}). Click a row for a live check.`
-      : `None of the ${snap.count} stocks scanned at the close (${when}) has a LEAPS call that passes the checks and fits ${fmt0(budget)}. Try a larger portfolio value.`);
+      ? `${Math.min(ideas.length, IDEA_LIMIT)} best of ${ideas.length} that fit, from ${snap.count} stocks and ETFs scanned ${when}. Click a row for a live check.`
+      : `None of the ${snap.count} stocks scanned ${when} has a LEAPS call that passes the checks and fits ${fmt0(budget)}. Try a larger portfolio value.`);
     return;
   }
 
@@ -537,9 +563,9 @@ async function screen(force = false) {
     status(`Checked ${done} of ${affordable.length}…`);
     if (!d.ok) return;
     const a = analyze(d, { ...settings(), maxCost: budget, contracts: 1 });
-    if (!a.best || a.verdict.level === "nogo" || !a.projection) return;
+    if (!fitsIdeas(a)) return;
     ideas.push({ t, d, a });
-    renderIdeas(ideas, pv);
+    renderIdeas(ideas, pv, "a few minutes ago");
   });
   if (id !== screenRun) return;
   progress(1);
@@ -563,12 +589,15 @@ function loadSnapshot(force) {
   return snapshotPromise;
 }
 
-function renderIdeas(ideas, pv) {
+function renderIdeas(ideas, pv, when) {
   ideas.sort((x, y) => y.a.projection.annualized - x.a.projection.annualized);
   const tb = $("ideasBody");
   tb.replaceChildren();
+  ideaInfo.clear();
   ideas.slice(0, IDEA_LIMIT).forEach(({ t, d, a }, i) => {
     const b = a.best, p = a.projection, cost = b.mid * 100;
+    ideaInfo.set(t, { t, when, level: a.verdict.level, symbol: b.symbol, contract: `${fmtDate(b.expiry)} $${b.strike}`,
+      bid: b.bid, ask: b.ask, spread: b.spreadPct, oi: b.oi });
     tb.append(el("tr", { "data-t": t, tabindex: "0", title: `Open the full ${t} check` },
       el("td", {}, String(i + 1)),
       el("td", { class: "tk" }, t),
