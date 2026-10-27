@@ -486,17 +486,27 @@ for (const id of ["portfolio", "contracts"]) $(id).addEventListener("input", () 
 let ideasTimer = null;
 $("portfolio").addEventListener("input", () => {
   clearTimeout(ideasTimer);
-  ideasTimer = setTimeout(() => screen(), 900);
+  ideasTimer = setTimeout(() => { setIdeasOpen(true); screen(); }, 900);
 });
-$("ideasRefresh").addEventListener("click", () => screen(true));
+$("ideasRefresh").addEventListener("click", () => { setIdeasOpen(true); screen(true); });
+$("ideasToggle").addEventListener("click", () => setIdeasOpen($("ideasPanel").hidden));
+// Opening a ticker from the list folds the list away, so the page focuses on that ticker.
+const openIdea = (t) => { setIdeasOpen(false); run(t, true); };
 $("ideasBody").addEventListener("click", (e) => {
   const tr = e.target.closest("tr[data-t]");
-  if (tr) run(tr.dataset.t, true);
+  if (tr) openIdea(tr.dataset.t);
 });
 $("ideasBody").addEventListener("keydown", (e) => {
   const tr = e.target.closest("tr[data-t]");
-  if (tr && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); run(tr.dataset.t, true); }
+  if (tr && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); openIdea(tr.dataset.t); }
 });
+
+function setIdeasOpen(open) {
+  $("ideasPanel").hidden = !open;
+  $("ideas").classList.toggle("collapsed", !open);
+  $("ideasToggle").setAttribute("aria-expanded", String(open));
+  $("ideasToggle").textContent = open ? "Hide list" : "Show list";
+}
 $("earn").addEventListener("change", render);
 
 // ---------- idea screener ----------
