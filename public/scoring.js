@@ -340,11 +340,27 @@ export function analyze(data, settings = {}) {
 
     let earnState = "info";
     const ed = settings.earningsOverride || (data.earnings && data.earnings.date);
+    // The report time only applies to the date it came with, not to a date the user typed.
+    const timing = !settings.earningsOverride || settings.earningsOverride === data.earnings?.date ? data.earnings?.timing : null;
+    let earnToday = null;
     if (ed) {
       const dn = daysBetween(today, ed);
-      if (dn >= 0 && dn <= 14) {
+      const newsSaysOut = !settings.earningsOverride && data.earnings?.reportedToday;
+      if (dn === 0 && (timing === "before-open" || newsSaysOut)) {
+        earnState = "pass";
+        earnToday = "reported";
+        details.unshift(timing === "before-open"
+          ? `Reported earnings today (${fmtDate(ed)}) before the market opened, so the usual drop in IV after the report has already happened. No need to wait for it.`
+          : `Earnings were due today (${fmtDate(ed)}), and today's headlines show the results are out, so the usual drop in IV after the report has happened or will at the next open. No need to wait for it.`);
+      } else if (dn === 0 && !timing) {
+        earnState = "warn";
+        earnToday = "unknown";
+        details.unshift(`Earnings are today (${fmtDate(ed)}), and the source doesn't say what time. If the company already reported before the open, the IV drop has happened and you don't need to wait. If it reports after the close, wait until tomorrow. Once you know, you can enter the next earnings date below.`);
+      } else if (dn >= 0 && dn <= 14) {
         earnState = "fail";
-        details.unshift(`Earnings on ${fmtDate(ed)}, in ${dn} day${dn === 1 ? "" : "s"}. IV usually drops right after the report, so buying now pays for volatility you'll likely lose.`);
+        details.unshift(dn === 0
+          ? `Earnings today (${fmtDate(ed)}) after the market closes. IV usually drops right after the report, so buying now pays for volatility you'll likely lose. Check again tomorrow.`
+          : `Earnings on ${fmtDate(ed)}, in ${dn} day${dn === 1 ? "" : "s"}. IV usually drops right after the report, so buying now pays for volatility you'll likely lose.`);
       } else if (dn > 14 && dn <= 30) {
         earnState = "warn";
         details.unshift(`Earnings on ${fmtDate(ed)}, in ${dn} days.`);
@@ -359,10 +375,11 @@ export function analyze(data, settings = {}) {
     const state = worst(ivState === "info" ? "pass" : ivState, earnState === "info" ? "pass" : earnState);
     const summary =
       earnState === "fail" ? "Earnings are close. Wait until after the report."
+      : earnToday === "unknown" ? "Earnings are today. Check whether the report is already out."
       : ivState === "fail" ? "Options are priced well above the stock's normal volatility."
       : ivState === "warn" ? "IV is somewhat elevated versus normal."
       : earnState === "warn" ? (ed ? "Earnings within a month; buying after the report is usually cheaper." : "Earnings date unknown.")
-      : ivState === "pass" ? "IV is near or below the stock's normal volatility."
+      : ivState === "pass" ? (earnToday === "reported" ? "Earnings came out this morning, and IV is near or below normal." : "IV is near or below the stock's normal volatility.")
       : "IV couldn't be compared with history.";
     add(4, "Implied volatility", "IV low or normal, no earnings soon", state, summary, details);
     checks[3].ivState = ivState;
@@ -380,6 +397,19 @@ export function analyze(data, settings = {}) {
 
   // 6. the stock
   const q = stockQuality(data, trend);
+  // Recent risk headlines (last 7 days) are worth reading before buying, so they raise a caution.
+  const recent = (data.news || []).filter((n) => daysBetween(n.time.slice(0, 10), today) <= 7);
+  const risky = recent.filter((n) => n.tags.includes("risk"));
+  if (risky.length) {
+    q.state = worst(q.state, "warn");
+    q.items.push(`Recent headlines to read before buying: ${risky.slice(0, 2).map((n) => `"${n.title}" (${n.publisher || "news"}, ${fmtDate(n.time.slice(0, 10))})`).join("; ")}.`);
+  } else if (data.news) {
+    q.items.push(recent.length ? `No warning signs in the last week's ${recent.length} headline${recent.length === 1 ? "" : "s"} (keyword scan). Skim them in the stock card.` : "No headlines in the last week.");
+  }
+  const exd = data.fundamentals?.exDividendDate;
+  if (exd && daysBetween(today, exd) >= 0 && daysBetween(today, exd) <= 30) {
+    q.items.push(`Goes ex-dividend on ${fmtDate(exd)}. The share price usually drops by the dividend that day, and call holders don't get the dividend.`);
+  }
   add(6, "The stock itself", "Quality business, uptrend or clear bottom", q.state,
     q.state === "pass" ? "Healthy trend and solid business numbers."
       : q.state === "fail" ? "Weak trend and weak business numbers."

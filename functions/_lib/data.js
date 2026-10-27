@@ -141,9 +141,9 @@ export function normalizeYahoo(json, todayISO) {
   const dates = (ce.earningsDate || [])
     .map((d) => raw(d))
     .filter(Boolean)
-    .map((s) => new Date(s * 1000).toISOString().slice(0, 10))
-    .filter((d) => d >= todayISO)
-    .sort();
+    .map((s) => earningsWhen(s, !!ce.isEarningsDateEstimate))
+    .filter((e) => e.date >= todayISO)
+    .sort((a, b) => (a.date < b.date ? -1 : 1));
   return {
     name: pr.longName || pr.shortName || null,
     quoteType: pr.quoteType || null,
@@ -165,8 +165,23 @@ export function normalizeYahoo(json, todayISO) {
     targetMean: raw(fd.targetMeanPrice),
     beta: raw(sd.beta) ?? raw(ks.beta),
     dividendYield: raw(sd.dividendYield),
-    earningsDate: dates[0] || null,
+    exDividendDate: (() => { const x = raw(r.calendarEvents && r.calendarEvents.exDividendDate); return x ? new Date(x * 1000).toISOString().slice(0, 10) : null; })(),
+    earningsDate: dates[0] ? dates[0].date : null,
+    earningsTiming: dates[0] ? dates[0].timing : null,
   };
+}
+
+// Yahoo gives the report time as a Unix timestamp. Turn it into the New York date and whether the company
+// reports before the open or after the close. A timestamp at exactly midnight UTC, or an estimated date,
+// carries no real time of day.
+export function earningsWhen(sec, estimate = false) {
+  if (estimate || sec % 86400 === 0) return { date: new Date(sec * 1000).toISOString().slice(0, 10), timing: null };
+  const parts = Object.fromEntries(new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+  }).formatToParts(new Date(sec * 1000)).map((p) => [p.type, p.value]));
+  const h = +parts.hour + +parts.minute / 60;
+  const timing = h >= 5 && h < 9.5 ? "before-open" : h >= 16 ? "after-close" : null;
+  return { date: `${parts.year}-${parts.month}-${parts.day}`, timing };
 }
 
 // Reuse one Yahoo session per Worker instance (per fetch function) for 30 minutes,
@@ -214,11 +229,18 @@ export function parseNasdaqEarnings(json, todayISO) {
   return iso >= todayISO ? iso : null;
 }
 
+export function parseNasdaqTiming(json) {
+  const d = (json && json.data) || {};
+  const text = [d.announcement, d.reportText].filter(Boolean).join(" ");
+  return /before (the )?market open|pre-?market/i.test(text) ? "before-open" : /after (the )?market close/i.test(text) ? "after-close" : null;
+}
+
 async function fetchNasdaqEarnings(fetchFn, ticker, todayISO) {
   const json = await getJSON(fetchFn, `https://api.nasdaq.com/api/analyst/${encodeURIComponent(ticker)}/earnings-date`, {
     headers: { Origin: "https://www.nasdaq.com", Referer: "https://www.nasdaq.com/" },
   });
-  return parseNasdaqEarnings(json, todayISO);
+  const date = parseNasdaqEarnings(json, todayISO);
+  return date ? { date, timing: parseNasdaqTiming(json) } : null;
 }
 
 // ---------- Ticker search (autocomplete) ----------
@@ -246,6 +268,46 @@ export async function searchTickers(query, { fetchFn = fetch } = {}) {
   return { ok: true, results: normalizeSearch(json) };
 }
 
+// ---------- News (Yahoo Finance search) ----------
+
+// Rough keyword tags so a reader can spot the headlines that matter. They point at what to read; they don't judge it.
+const RISK_RE = /\b(downgrade[sd]?|cut to (sell|underperform|neutral|hold)|lawsuit|sues|sued|class action|probe|investigat\w*|SEC|subpoena|fraud|recall\w*|bankrupt\w*|default\w*|delist\w*|stock offering|share offering|secondary offering|dilut\w*|(cuts|lowers|slashes|withdraws) (its )?(guidance|outlook|forecast)|layoffs?|resign\w*|steps down|halt\w*|short seller|plunge\w*|tumbl\w*|sinks?)\b/i;
+const GOOD_RE = /\b(upgrade[sd]?|raises? (its )?(guidance|outlook|forecast)|beats?|tops|record|buyback|repurchase|surge\w*|soar\w*|jumps?)\b/i;
+const RESULTS_RE = /\b(earnings|results|quarter|Q[1-4])\b/i;
+const RESULTS_OUT_RE = /\b(reports?|reported|posts?|posted|beats?|miss(es|ed)?|tops|topped|delivers|surpass\w*|falls short)\b/i;
+const PREVIEW_RE = /\b(what to expect|preview|ahead of|to report|will report|set to report|expected to|due to report|earnings date|before earnings|into earnings)\b/i;
+
+export function tagHeadline(title) {
+  const tags = [];
+  if (RESULTS_RE.test(title) && RESULTS_OUT_RE.test(title) && !PREVIEW_RE.test(title)) tags.push("results");
+  if (RISK_RE.test(title)) tags.push("risk");
+  else if (GOOD_RE.test(title)) tags.push("positive");
+  return tags;
+}
+
+export function normalizeNews(json, nowMs = Date.now()) {
+  const items = (json && json.news) || [];
+  const seen = new Set();
+  const out = [];
+  for (const n of items) {
+    const title = String(n.title || "").trim();
+    const link = String(n.link || "");
+    const t = num(n.providerPublishTime);
+    if (!title || !/^https?:\/\//.test(link) || !t || seen.has(title)) continue;
+    // Last 14 days only.
+    if (nowMs - t * 1000 > 14 * 86400000) continue;
+    seen.add(title);
+    out.push({ title, link, publisher: n.publisher || "", time: new Date(t * 1000).toISOString(), tags: tagHeadline(title) });
+  }
+  return out.sort((a, b) => (a.time < b.time ? 1 : -1)).slice(0, 8);
+}
+
+async function fetchNews(fetchFn, ticker, nowMs) {
+  const q = ticker.replace(".", "-");
+  const url = `https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(q)}&quotesCount=0&newsCount=12&listsCount=0&enableFuzzyQuery=false`;
+  return normalizeNews(await getJSON(fetchFn, url), nowMs);
+}
+
 // ---------- Batch quotes (for the idea screener) ----------
 
 export const MAX_BATCH = 40;
@@ -271,11 +333,12 @@ export async function gatherData(ticker, { fetchFn = fetch, now = new Date() } =
   const sym = cboeSymbol(ticker);
   const notes = [];
 
-  const [chainR, quoteR, histR, yahooR] = await Promise.allSettled([
+  const [chainR, quoteR, histR, yahooR, newsR] = await Promise.allSettled([
     getJSON(fetchFn, `${CBOE}/options/${sym}.json`),
     getJSON(fetchFn, `${CBOE}/quotes/${sym}.json`),
     getJSON(fetchFn, `${CBOE}/charts/historical/${sym}.json`),
     fetchYahoo(fetchFn, ticker, todayISO),
+    fetchNews(fetchFn, ticker, now.getTime()),
   ]);
 
   if (chainR.status === "rejected") {
@@ -301,15 +364,24 @@ export async function gatherData(ticker, { fetchFn = fetch, now = new Date() } =
   else notes.push("Fundamentals source (Yahoo Finance) didn't respond; quality checks use the price trend only.");
 
   let earningsDate = fundamentals && fundamentals.earningsDate;
+  let earningsTiming = (fundamentals && fundamentals.earningsTiming) || null;
   let earningsSource = earningsDate ? "Yahoo Finance" : null;
   if (!earningsDate && !INDEXES.has(ticker)) {
     try {
-      earningsDate = await fetchNasdaqEarnings(fetchFn, ticker, todayISO);
-      if (earningsDate) earningsSource = "Nasdaq";
+      const n = await fetchNasdaqEarnings(fetchFn, ticker, todayISO);
+      if (n) { earningsDate = n.date; earningsTiming = n.timing; earningsSource = "Nasdaq"; }
     } catch (e) {
       /* fall through */
     }
   }
+
+  const news = newsR.status === "fulfilled" ? newsR.value : null;
+  if (!news) notes.push("News headlines (Yahoo Finance) didn't load.");
+
+  // If the report is today and a results headline already came out today, the numbers are public.
+  const nyDate = (iso) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(new Date(iso));
+  const reportedToday = !!(earningsDate && news && earningsDate === nyDate(now.toISOString()) &&
+    news.some((n) => n.tags.includes("results") && nyDate(n.time) === earningsDate));
 
   const price = quote.price ?? chain.underlying.price ?? (history.length ? history[history.length - 1].c : null);
   if (!price) return { ok: false, ticker, error: `Couldn't get a current price for ${ticker}.` };
@@ -331,7 +403,8 @@ export async function gatherData(ticker, { fetchFn = fetch, now = new Date() } =
     calls,
     history,
     fundamentals,
-    earnings: { date: earningsDate || null, source: earningsSource },
+    earnings: { date: earningsDate || null, timing: earningsTiming, source: earningsSource, reportedToday },
+    news,
     notes,
   };
 }

@@ -116,6 +116,27 @@ async function run(ticker, fromIdeas = false) {
   }
 }
 
+const NEWS_TAGS = { results: ["Results", "info"], risk: ["Watch out", "fail"], positive: ["Positive", "pass"] };
+
+function ago(iso) {
+  const m = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 60000));
+  return m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : fmtDate(iso.slice(0, 10));
+}
+
+function renderNews(news) {
+  const ul = $("newsList");
+  ul.replaceChildren();
+  if (!news) return ul.append(el("li", { class: "empty" }, "Headlines didn't load this time. Try again in a minute."));
+  if (!news.length) return ul.append(el("li", { class: "empty" }, "No headlines in the last two weeks."));
+  for (const n of news.slice(0, 6)) {
+    ul.append(el("li", {},
+      el("a", { href: n.link, target: "_blank", rel: "noopener noreferrer" }, n.title),
+      el("span", { class: "meta" },
+        [n.publisher, ago(n.time)].filter(Boolean).join(" · "),
+        ...n.tags.map((t) => el("span", { class: "pill " + NEWS_TAGS[t][1] }, NEWS_TAGS[t][0])))));
+  }
+}
+
 function render() {
   if (!data) return;
   const st = settings();
@@ -241,7 +262,13 @@ function render() {
     data.isIndex ? "Indexes don't report earnings."
       : ed ? `The next scheduled earnings report${settings().earningsOverride ? " (the date you entered)" : data.earnings.source ? `, from ${data.earnings.source}` : ""}. Options are usually expensive just before earnings and get cheaper right after, so it's often better to buy after the report.`
       : "We couldn't find the next earnings date. Look it up and enter it in the box below, so the IV check can use it.",
-    edDays != null && edDays >= 0 ? `in ${edDays} day${edDays === 1 ? "" : "s"}` : null);
+    edDays === 0 ? (ed === data.earnings.date && data.earnings.timing === "before-open" ? "today, before the open"
+      : ed === data.earnings.date && data.earnings.timing === "after-close" ? "today, after the close" : "today")
+      : edDays != null && edDays > 0 ? `in ${edDays} day${edDays === 1 ? "" : "s"}` : null);
+  if (f.exDividendDate && daysBetween(data.today, f.exDividendDate) >= 0) srow("Ex-dividend", fmtDate(f.exDividendDate),
+    "The first day the stock trades without its next dividend. The price usually drops by about the dividend that day. Call holders don't receive dividends.",
+    `in ${daysBetween(data.today, f.exDividendDate)} days`);
+  renderNews(data.news);
   if (f.sector) srow("Sector", f.sector,
     `The part of the economy the company belongs to${f.industry ? `. Its industry is ${f.industry}` : ""}.`);
   if (f.marketCap != null) srow("Market cap", fmtBig(f.marketCap),

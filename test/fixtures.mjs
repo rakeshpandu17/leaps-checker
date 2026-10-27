@@ -65,7 +65,16 @@ export function mockFetch(over = {}) {
   };
 }
 
-export const searchFixture = { quotes: [
+const ago = (h) => Math.round(Date.now() / 1000 - h * 3600);
+export const newsFixture = [
+  { title: "SoFi Technologies reports record third-quarter results, raises full-year outlook", publisher: "Business Wire", link: "https://example.com/sofi-q3", providerPublishTime: ago(3) },
+  { title: "SoFi stock jumps after earnings beat", publisher: "Investor's Business Daily", link: "https://example.com/sofi-jumps", providerPublishTime: ago(2) },
+  { title: "Analyst downgrades SoFi to Neutral on valuation", publisher: "Barron's", link: "https://example.com/sofi-down", providerPublishTime: ago(30) },
+  { title: "SoFi earnings: what to expect this week", publisher: "Yahoo Finance", link: "https://example.com/sofi-preview", providerPublishTime: ago(72) },
+  { title: "Fintech stocks to watch in November", publisher: "Motley Fool", link: "https://example.com/fintech", providerPublishTime: ago(100) },
+  { title: "Old story", publisher: "X", link: "https://example.com/old", providerPublishTime: ago(24 * 20) },
+];
+export const searchFixture = { news: newsFixture, quotes: [
   { symbol: "SOFI", shortname: "SoFi Technologies, Inc.", longname: "SoFi Technologies, Inc.", quoteType: "EQUITY", exchange: "NMS", exchDisp: "NASDAQ" },
   { symbol: "SOFX", shortname: "Defiance Daily Target 2X Long SOFI", quoteType: "ETF", exchange: "NGM", exchDisp: "NASDAQ" },
   { symbol: "SOF.L", shortname: "Some London Listing", quoteType: "EQUITY", exchange: "LSE", exchDisp: "London" },

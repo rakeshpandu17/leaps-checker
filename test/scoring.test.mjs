@@ -45,6 +45,41 @@ test("SOFI before earnings: WAIT with a deep ITM LEAPS picked", async () => {
   console.log(a.checks.map((c) => `${c.id} ${c.state} ${c.summary}`).join("\n"));
 });
 
+test("earnings time of day from Yahoo's timestamp", async () => {
+  const { earningsWhen } = await import("../functions/_lib/data.js");
+  assert.deepEqual(earningsWhen(Date.parse("2026-10-27T11:00:00Z") / 1000), { date: "2026-10-27", timing: "before-open" });
+  assert.deepEqual(earningsWhen(Date.parse("2026-10-27T20:05:00Z") / 1000), { date: "2026-10-27", timing: "after-close" });
+  assert.deepEqual(earningsWhen(Date.parse("2026-10-28T01:00:00Z") / 1000), { date: "2026-10-27", timing: "after-close" });
+  assert.deepEqual(earningsWhen(Date.parse("2026-10-27T00:00:00Z") / 1000), { date: "2026-10-27", timing: null });
+  assert.equal(earningsWhen(Date.parse("2026-10-27T11:00:00Z") / 1000, true).timing, null);
+});
+
+test("earnings today: reported before the open doesn't wait; after the close or unknown time does", async () => {
+  const base = await get();
+  const at = (timing) => analyze({ ...base, today: "2026-10-27", earnings: { date: "2026-10-27", timing, source: "Yahoo Finance" } });
+  const pre = at("before-open"), post = at("after-close"), unk = at(null);
+  assert.equal(pre.checks[3].earnState, "pass");
+  assert.ok(!pre.verdict.reasons.some((r) => /Earnings/.test(r)), JSON.stringify(pre.verdict));
+  assert.equal(post.checks[3].earnState, "fail");
+  assert.equal(post.verdict.level, "wait");
+  assert.equal(unk.checks[3].earnState, "warn");
+  assert.match(unk.checks[3].summary, /today/);
+});
+
+test("news: tags headlines, drops old ones, flags risk in the stock check", async () => {
+  const { tagHeadline } = await import("../functions/_lib/data.js");
+  assert.deepEqual(tagHeadline("SoFi reports third-quarter results"), ["results"]);
+  assert.deepEqual(tagHeadline("SoFi earnings: what to expect"), []);
+  assert.deepEqual(tagHeadline("Analyst downgrades SoFi to Neutral"), ["risk"]);
+  assert.deepEqual(tagHeadline("SoFi stock jumps after earnings beat"), ["results", "positive"]);
+  const d = await get();
+  assert.equal(d.news.length, 5);
+  assert.ok(d.news[0].time >= d.news[1].time);
+  const a = analyze(d);
+  assert.equal(a.checks[5].state, "warn");
+  assert.ok(a.checks[5].details.some((x) => /downgrades/.test(x)));
+});
+
 test("calm IV, earnings far away, uptrend: GO", async () => {
   const far = Date.parse("2027-01-28T12:00:00Z") / 1000;
   const d = await get({ yahoo: () => yahoo(far), options: () => chain("SOFI", 14.77, 0.42), quotes: () => ({ data: { current_price: 14.77, iv30: 40 } }), historical: () => history(14.77, 500, 0.0012, 0.028) });
