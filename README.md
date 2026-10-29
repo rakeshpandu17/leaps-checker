@@ -41,7 +41,7 @@ Works as either a Cloudflare Worker (uses `wrangler.jsonc` + `src/worker.js`) or
 
 ## Nightly scan
 
-`.github/workflows/nightly-scan.yml` runs `scripts/nightly-scan.mjs` twice each weekday, at 15:00 UTC (mid-morning, while option quotes are tight) and 23:00 UTC (evening, after most after-the-close earnings reports).
+`.github/workflows/nightly-scan.yml` runs `scripts/nightly-scan.mjs` twice each weekday, at 15:00 UTC (mid-morning, while option quotes are tight) and 23:00 UTC (evening, after most after-the-close earnings reports). GitHub often starts scheduled runs late, so the Worker's Cron Triggers (`triggers` in `wrangler.jsonc`) start the workflow on time through the GitHub API. Add a Worker secret named `GITHUB_TOKEN`: a fine-grained token for this repository with "Actions: Read and write". GitHub's own schedule stays as a backup and skips itself when a scan finished in the last 3 hours.
 It fetches data for about 330 tickers in `scripts/scan-universe.mjs` and commits a compact snapshot to
 `public/data/scan.json`; the push redeploys the site. The "LEAPS ideas" list ranks that snapshot in the browser
 (falling back to a live scan of `public/universe.js` if the snapshot is missing or over 5 days old).

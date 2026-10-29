@@ -100,6 +100,16 @@ export async function scan(tickers, { fetchFn = fetch, now = new Date(), log = c
 if (import.meta.url === `file://${process.argv[1]}`) {
   const via = process.env.SCAN_VIA || null;
   if (via) console.log(`Fetching through ${via}`);
+  // GitHub's own schedule is a backup for the Cloudflare timer and often runs hours late. Skip it when a scan
+  // already finished in the last 3 hours, so the same slot isn't scanned twice.
+  if (process.env.GITHUB_EVENT_NAME === "schedule" && via) {
+    const last = await fetch(`${via}/data/scan.json`, { cache: "no-store" }).then((r) => r.json()).catch(() => null);
+    const ageH = last && last.generatedAt ? (Date.now() - Date.parse(last.generatedAt)) / 3600000 : Infinity;
+    if (ageH < 3) {
+      console.log(`Latest scan is ${ageH.toFixed(1)} hours old; skipping this scheduled run.`);
+      process.exit(0);
+    }
+  }
   const result = await scan(SCAN_UNIVERSE, { via });
   // Don't replace a good snapshot with a mostly failed one.
   if (result.count < SCAN_UNIVERSE.length * 0.5) {
