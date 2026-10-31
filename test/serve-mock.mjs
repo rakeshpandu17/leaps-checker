@@ -41,6 +41,8 @@ http.createServer(async (req, res) => {
   }
   if (url.pathname === "/data/scan.json") { res.writeHead(200, { "content-type": "application/json" }); return res.end(sampleSnapshot); }
   const p = join("public", url.pathname === "/" ? "index.html" : url.pathname);
-  try { res.writeHead(200, { "content-type": types[extname(p)] || "text/plain" }); res.end(await readFile(p)); }
-  catch { res.writeHead(404); res.end(); }
+  let body;
+  try { body = await readFile(p); } catch { res.writeHead(404); return res.end(); }
+  res.writeHead(200, { "content-type": types[extname(p)] || "text/plain" });
+  res.end(body);
 }).listen(process.env.PORT || 8788);

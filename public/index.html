@@ -86,6 +86,8 @@
       <p class="diff pick" id="vPick" hidden><span id="vPickText"></span> <button type="button" id="pickReset">Back to the best fit</button></p>
     </div>
 
+    <!-- On a wide screen the contract, stock and news cards sit in a column on the right. -->
+    <aside class="side" aria-label="Contract, stock and news">
     <div class="grid2">
       <article class="card" id="bestCard">
         <span class="eyebrow" id="bestEyebrow">Best-fitting contract</span>
@@ -108,7 +110,9 @@
       <ul id="newsList"></ul>
       <p class="news-note">Headlines from Yahoo Finance, loaded with each check. Tags come from a simple keyword scan, so read the story before acting on it.</p>
     </section>
+    </aside>
 
+    <div class="main-col">
     <section class="checks" id="checks" aria-label="The eight checks"></section>
 
     <section class="card" id="altCard">
@@ -124,6 +128,7 @@
     </section>
 
     <p class="notes" id="notes"></p>
+    </div>
   </section>
 
   <footer class="foot">

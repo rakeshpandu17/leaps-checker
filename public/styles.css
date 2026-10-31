@@ -86,6 +86,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .status.error { background: var(--fail-bg); color: var(--fail); }
 
 #result { display: grid; gap: 20px; }
+.side, .main-col { display: grid; gap: 20px; align-content: start; min-width: 0; }
 .verdict { border-radius: 12px; padding: 20px; display: grid; gap: 14px; background: var(--surface); border: 1px solid var(--line); border-left-width: 6px; }
 .verdict.go { border-left-color: var(--pass); }
 .verdict.wait { border-left-color: var(--warn); }
@@ -169,6 +170,23 @@ td { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 .foot { display: grid; gap: 10px; font-size: .86rem; color: var(--muted); }
 .caveat { border: 1px solid var(--warn); background: var(--warn-bg); color: var(--ink); border-radius: 8px; padding: 12px 14px; font-size: .93rem; }
 .caveat strong { color: var(--warn); }
+/* Wide screens: use the width. Results go in two columns (checks on the left; contract, stock and news on the
+   right), the eight checks sit two across, and the header and disclosures spread out. */
+@media (min-width: 1180px) {
+  .wrap { max-width: 1440px; padding-left: max(32px, env(safe-area-inset-left, 0px)); padding-right: max(32px, env(safe-area-inset-right, 0px)); }
+  .top { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); column-gap: 32px; align-items: start; }
+  .top > :not(.caveat) { grid-column: 1; }
+  .top .caveat { grid-column: 2; grid-row: 1 / span 3; align-self: center; }
+  #result { grid-template-columns: minmax(0, 1fr) 400px; grid-template-areas: "verdict side" "main side"; align-items: start; }
+  #verdict { grid-area: verdict; }
+  .side { grid-area: side; }
+  .main-col { grid-area: main; }
+  .side .grid2 { grid-template-columns: 1fr; }
+  .checks { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; background: none; border: 0; }
+  .checks .check { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; align-content: start; }
+  .disclosures ul { display: block; columns: 2; column-gap: 32px; }
+  .disclosures li { break-inside: avoid; margin-bottom: 6px; }
+}
 @media (max-width: 560px) {
   .check { grid-template-columns: 1fr; }
   .num { display: none; }
