@@ -27,6 +27,8 @@ Works as either a Cloudflare Worker (uses `wrangler.jsonc` + `src/worker.js`) or
 
 **As a Worker:** Compute → Workers & Pages → Create → Import a repository → pick this repo, keep the default deploy command (`npx wrangler deploy`). The Worker name must match `name` in `wrangler.jsonc` (currently `leaps-startegy-checker`).
 
+Other branches (such as `release/v1.0`) get preview builds through `wrangler preview`, which is why `wrangler.jsonc` has a `previews` block. When moving `release/v1.0` up to `main`, push `main` first and wait for its production build to finish: if both branches point at the same commit at once, Cloudflare may build only one of them.
+
 **As Pages:**
 
 1. Cloudflare dashboard → Workers & Pages → Create → Pages → Connect to Git → pick this repo.
