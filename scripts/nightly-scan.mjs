@@ -1,11 +1,13 @@
 // Nightly scan: fetches data for every ticker in SCAN_UNIVERSE and writes a compact snapshot to
 // public/data/scan.json, which the page uses to rank LEAPS ideas instantly.
 // Run: node scripts/nightly-scan.mjs   (GitHub Actions runs it each weekday evening)
-import { writeFile, mkdir } from "node:fs/promises";
+import { writeFile, readFile, mkdir } from "node:fs/promises";
 import { gatherData } from "../functions/_lib/data.js";
 import { SCAN_UNIVERSE } from "./scan-universe.mjs";
 
 const OUT = new URL("../public/data/scan.json", import.meta.url);
+const IV_OUT = new URL("../public/data/iv-history.json", import.meta.url);
+const IV_KEEP_DAYS = 260; // a little over a year of trading days
 const CONCURRENCY = 2;
 const PAUSE_MS = 400;
 const MIN_GAP_MS = 250; // at most ~4 requests a second to any data source
@@ -97,6 +99,33 @@ export async function scan(tickers, { fetchFn = fetch, now = new Date(), log = c
   return { generatedAt: now.toISOString(), date: now.toISOString().slice(0, 10), count: Object.keys(stocks).length, failed, stocks };
 }
 
+// Free sources don't publish past IV, so each scan saves every stock's 30-day IV: one reading per New York
+// trading day (a later scan the same day replaces it). The page turns these into a real IV rank and percentile.
+// Shape: { updated, dates: [ISO date...], iv: { TICKER: [iv30 or null, aligned with dates] } }.
+export function addIvReadings(hist, result, now = new Date()) {
+  const day = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(now);
+  const dates = [...((hist && hist.dates) || [])];
+  const iv = {};
+  for (const [t, xs] of Object.entries((hist && hist.iv) || {})) iv[t] = [...xs];
+  let col = dates.indexOf(day);
+  if (col < 0) {
+    dates.push(day);
+    col = dates.length - 1;
+  }
+  for (const xs of Object.values(iv)) while (xs.length < dates.length) xs.push(null);
+  for (const [t, s] of Object.entries(result.stocks)) {
+    if (!iv[t]) iv[t] = new Array(dates.length).fill(null);
+    if (s.iv30 != null && s.iv30 > 0) iv[t][col] = r2(s.iv30);
+  }
+  const drop = Math.max(0, dates.length - IV_KEEP_DAYS);
+  const out = { updated: now.toISOString(), dates: dates.slice(drop), iv: {} };
+  for (const [t, xs] of Object.entries(iv)) {
+    const kept = xs.slice(drop);
+    if (kept.some((x) => x != null)) out.iv[t] = kept;
+  }
+  return out;
+}
+
 if (import.meta.url === `file://${process.argv[1]}`) {
   const via = process.env.SCAN_VIA || null;
   if (via) console.log(`Fetching through ${via}`);
@@ -119,4 +148,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   await mkdir(new URL("../public/data/", import.meta.url), { recursive: true });
   await writeFile(OUT, JSON.stringify(result));
   console.log(`Wrote ${OUT.pathname}`);
+  const prevIv = await readFile(IV_OUT, "utf8").then(JSON.parse).catch(() => null);
+  const ivHist = addIvReadings(prevIv, result);
+  await writeFile(IV_OUT, JSON.stringify(ivHist));
+  console.log(`Wrote ${IV_OUT.pathname} (${ivHist.dates.length} days, ${Object.keys(ivHist.iv).length} tickers)`);
 }

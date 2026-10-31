@@ -17,8 +17,12 @@ Educational only, not financial advice.
   9+ months out, grades the eight checks, and builds the verdict.
 - `public/index.html` + `app.js` + `styles.css` are the page.
 
-Data limits: quotes are about 15 minutes delayed; free sources have no IV history, so "IV rank" is
-estimated by comparing today's 30-day IV with the stock's own realized volatility over the past year.
+Data limits: quotes are about 15 minutes delayed. Free sources have no IV history, so each scan saves every
+scanned stock's 30-day IV (one reading per trading day) to `public/data/iv-history.json`. Once a stock has 40
+saved days, the IV check uses a real IV rank and percentile from those readings (a full 52-week rank needs about
+252 days). Until then, and for stocks outside the scan, IV rank is estimated by comparing today's 30-day IV
+with the stock's own realized volatility over the past year. Yahoo's earnings date is checked against Nasdaq's,
+and a mismatch is flagged.
 If Yahoo or Nasdaq don't answer, the page says so and lets you type the earnings date in.
 
 ## Deploy (free, Cloudflare)

@@ -201,3 +201,67 @@ test("scan can fetch through the site's own API", async () => {
     globalThis.fetch = prev;
   }
 });
+
+test("earnings dates that disagree between sources are flagged", async () => {
+  const far = Date.parse("2027-01-28T12:00:00Z") / 1000;
+  const d = await get({ yahoo: () => yahoo(far) });
+  assert.equal(d.earnings.date, "2027-01-28");
+  assert.deepEqual(d.earnings.alt, { date: "2026-10-27", source: "Nasdaq" });
+  const a = analyze(d);
+  assert.ok(a.checks[3].details.some((x) => /Nasdaq lists the next report on/.test(x)));
+  assert.notEqual(a.checks[3].earnState, "pass");
+  // Matching dates: no flag.
+  const same = await get();
+  assert.equal(same.earnings.alt, null);
+});
+
+test("deal news, small caps and biotech raise a caution on the stock", async () => {
+  const { tagHeadline } = await import("../functions/_lib/data.js");
+  assert.ok(tagHeadline("Acme agrees to be acquired by Globex in $2B deal").includes("deal"));
+  assert.ok(tagHeadline("Acme announces restructuring plan").includes("deal"));
+  assert.deepEqual(tagHeadline("Acme beats estimates"), ["positive"]);
+  const small = (industry, cap) => () => {
+    const y = yahoo(Date.parse("2027-01-28T12:00:00Z") / 1000);
+    const r = y.quoteSummary.result[0];
+    r.assetProfile.industry = industry;
+    r.summaryDetail.marketCap.raw = cap;
+    return y;
+  };
+  const a = analyze(await get({ yahoo: small("Biotechnology", 1.2e9), search: () => ({ news: [] }) }));
+  assert.equal(a.checks[5].state === "pass", false);
+  assert.ok(a.checks[5].details.some((x) => /Small company: market value \$1\.2B/.test(x)));
+  assert.ok(a.checks[5].details.some((x) => /^Biotech/.test(x)));
+});
+
+test("real IV rank from saved IV readings", async () => {
+  const { ivRank } = await import("../public/scoring.js");
+  const r = ivRank(40, [30, 35, 50, 60, 70]);
+  assert.equal(Math.round(r.rank), 25);
+  assert.equal(r.pctile, 40);
+  assert.equal(r.days, 5);
+  // Too few readings: the estimate is used, with a note on progress.
+  const d = await get({ yahoo: () => yahoo(Date.parse("2027-01-28T12:00:00Z") / 1000) });
+  d.ivHist = [50, 52, 55];
+  const few = analyze(d);
+  assert.ok(few.checks[3].details.some((x) => /Real IV rank starts once 40 days/.test(x) && /3 so far/.test(x)));
+  // Enough readings with today's IV (57.26) near the top: IV check fails, verdict waits.
+  d.ivHist = Array.from({ length: 60 }, (_, i) => 30 + (i % 20));
+  const hi = analyze(d);
+  assert.equal(hi.checks[3].ivState, "fail");
+  assert.ok(hi.checks[3].details.some((x) => /^IV rank 100 and IV percentile 100, from 60 days/.test(x)));
+  // Today's IV low in the range: passes.
+  d.ivHist = Array.from({ length: 60 }, (_, i) => 50 + (i % 30));
+  assert.equal(analyze(d).checks[3].ivState, "pass");
+});
+
+test("scan saves one IV reading per day per ticker", async () => {
+  const { addIvReadings } = await import("../scripts/nightly-scan.mjs");
+  const day1 = new Date("2026-11-02T16:00:00Z"), day1eve = new Date("2026-11-02T23:00:00Z"), day2 = new Date("2026-11-03T16:00:00Z");
+  let h = addIvReadings(null, { stocks: { AAA: { iv30: 30 }, BBB: { iv30: 40 } } }, day1);
+  h = addIvReadings(h, { stocks: { AAA: { iv30: 31 }, BBB: { iv30: null } } }, day1eve);
+  assert.deepEqual(h.dates, ["2026-11-02"]);
+  assert.deepEqual(h.iv, { AAA: [31], BBB: [40] });
+  h = addIvReadings(h, { stocks: { AAA: { iv30: 33 }, CCC: { iv30: 20 } } }, day2);
+  assert.deepEqual(h.dates, ["2026-11-02", "2026-11-03"]);
+  assert.deepEqual(h.iv, { AAA: [31, 33], BBB: [40, null], CCC: [null, 20] });
+});

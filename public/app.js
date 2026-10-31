@@ -81,10 +81,30 @@ function fetchAnalysis(ticker) {
   if (hit && Date.now() - hit.at < CACHE_MS) return hit.promise;
   const promise = fetch(`/api/analyze?ticker=${encodeURIComponent(ticker)}`)
     .then((res) => res.json().catch(() => ({ ok: false, error: `Server error (${res.status}).` })))
-    .catch((e) => ({ ok: false, error: `Couldn't reach the data service: ${e.message}` }));
+    .catch((e) => ({ ok: false, error: `Couldn't reach the data service: ${e.message}` }))
+    .then(withIvHist);
   cache.set(ticker, { at: Date.now(), promise });
   promise.then((b) => { if (!b.ok) cache.delete(ticker); });
   return promise;
+}
+
+// The 30-day IV readings the daily scan saves, for a real IV rank. Missing file or ticker: the estimate is used.
+let ivHistPromise = null;
+function loadIvHist() {
+  if (!ivHistPromise) {
+    ivHistPromise = fetch("/data/iv-history.json", { cache: "no-cache" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => (j && j.iv ? j : null))
+      .catch(() => null);
+  }
+  return ivHistPromise;
+}
+async function withIvHist(d) {
+  if (d && d.ok !== false && d.ticker) {
+    const h = await loadIvHist();
+    d.ivHist = (h && h.iv[d.ticker]) || null;
+  }
+  return d;
 }
 
 async function run(ticker, fromIdeas = false) {
@@ -119,7 +139,13 @@ async function run(ticker, fromIdeas = false) {
   }
 }
 
-const NEWS_TAGS = { results: ["Results", "info"], risk: ["Watch out", "fail"], positive: ["Positive", "pass"] };
+const NEWS_TAGS = { results: ["Results", "info"], deal: ["Deal", "warn"], risk: ["Watch out", "fail"], positive: ["Positive", "pass"] };
+// What each verdict does and doesn't mean: the checks are a rule screen, not investment advice.
+const MEANING = {
+  go: "Go means this contract passes the rules and is worth a closer look. It isn't a buy signal: check the business, the IV and the earnings date yourself before you buy.",
+  wait: "Wait means something here isn't right yet. Review the flagged checks yourself; the rest may still be fine.",
+  nogo: "No-go means it fails the rules, not that the company is bad. Read why before you dismiss it.",
+};
 
 function ago(iso) {
   const m = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 60000));
@@ -164,6 +190,7 @@ function render() {
   ul.replaceChildren();
   const reasons = v.reasons.length ? v.reasons : ["All core checks pass. Keep it small and follow the exit plan."];
   for (const r of reasons) ul.append(el("li", {}, r));
+  $("vMeaning").textContent = MEANING[v.level];
   $("vDiff").replaceChildren();
   $("vDiff").hidden = true;
   const nb = a.best, same = !!nb && nb.symbol === ideaRef?.symbol;
@@ -581,12 +608,15 @@ async function screen(force = false) {
   const snap = await loadSnapshot(force);
   if (id !== screenRun) return;
   if (snap) {
+    const ivh = await loadIvHist();
+    if (id !== screenRun) return;
     const today = new Date().toISOString().slice(0, 10);
     const ideas = [];
     for (const [t, s] of Object.entries(snap.stocks)) {
       // A 0.75-delta LEAPS usually costs at least about a quarter of the share price per share.
       if (s.price * 100 * 0.22 > budget) continue;
       const d = fromSnapshot(t, s, today);
+      d.ivHist = (ivh && ivh.iv[t]) || null;
       const a = analyze(d, { ...settings(), maxCost: budget, contracts: 1 });
       if (!fitsIdeas(a)) continue;
       ideas.push({ t, d, a });

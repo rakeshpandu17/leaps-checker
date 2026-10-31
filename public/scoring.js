@@ -90,8 +90,8 @@ export function trendInfo(history, price) {
   };
 }
 
-// Free sources don't publish IV history, so true IV rank isn't available.
-// Proxy: today's 30-day IV against the stock's own realized volatility over the past year.
+// Free sources don't publish IV history. Until the daily scan has saved enough of its own IV readings
+// (see ivRank), the proxy is today's 30-day IV against the stock's own realized volatility over the past year.
 export function ivContext(iv30Pct, history) {
   const closes = history.map((h) => h.c);
   if (closes.length < 60) return { iv30: iv30Pct, hv1y: null, ratio: null, pctile: null };
@@ -110,6 +110,22 @@ export function ivContext(iv30Pct, history) {
     hv30: hv30 * 100,
     ratio: iv != null && hv1y > 0 ? iv / hv1y : null,
     pctile,
+  };
+}
+
+// True IV rank and percentile from the 30-day IV readings the daily scan saves, one per trading day.
+// Needs IV_RANK_MIN_DAYS readings before it's trusted; a full 52-week rank needs about 252.
+export const IV_RANK_MIN_DAYS = 40;
+export function ivRank(iv30Pct, readings) {
+  const xs = (readings || []).filter((x) => x != null && x > 0);
+  if (iv30Pct == null || !xs.length) return { days: xs.length, rank: null, pctile: null };
+  const lo = Math.min(...xs), hi = Math.max(...xs);
+  return {
+    days: xs.length,
+    low: lo,
+    high: hi,
+    rank: hi > lo ? Math.min(100, Math.max(0, ((iv30Pct - lo) / (hi - lo)) * 100)) : 50,
+    pctile: (xs.filter((x) => x < iv30Pct).length / xs.length) * 100,
   };
 }
 
@@ -203,6 +219,7 @@ export function rankCandidates(enriched) {
 const fmt$ = (x) =>
   x == null ? "n/a" : "$" + x.toLocaleString("en-US", { minimumFractionDigits: x >= 1000 ? 0 : 2, maximumFractionDigits: x >= 1000 ? 0 : 2 });
 const fmtPct = (x, d = 1) => (x == null ? "n/a" : (x >= 0 ? "+" : "") + x.toFixed(d) + "%");
+const fmtCap = (x) => (x >= 1e9 ? "$" + (x / 1e9).toFixed(1) + "B" : "$" + Math.round(x / 1e6) + "M");
 const fmtDate = (iso) =>
   new Date(iso + "T00:00:00Z").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
 
@@ -331,10 +348,19 @@ export function analyze(data, settings = {}) {
   {
     const details = [];
     let ivState = "info";
-    if (ivc.ratio != null) {
+    const ivr = data.ivHist ? ivRank(ivc.iv30, data.ivHist) : null;
+    const realRank = ivr && ivr.days >= IV_RANK_MIN_DAYS && ivr.rank != null;
+    if (realRank) {
+      // Enough saved IV readings: judge IV against its own past, like a standard IV rank.
+      ivState = ivr.pctile <= 50 ? "pass" : ivr.pctile <= 80 ? "warn" : "fail";
+      details.push(`IV rank ${ivr.rank.toFixed(0)} and IV percentile ${ivr.pctile.toFixed(0)}, from ${ivr.days} days of saved 30-day IV readings (low ${ivr.low.toFixed(1)}%, high ${ivr.high.toFixed(1)}%, today ${ivc.iv30.toFixed(1)}%).` +
+        (ivr.days < 252 ? " A full 52-week rank needs about 252 days, so treat this as a shorter-term rank." : ""));
+      if (ivc.ratio != null) details.push(`For context: 30-day IV vs the stock's own 1-year realized volatility ${ivc.hv1y.toFixed(1)}% (ratio ${ivc.ratio.toFixed(2)}).`);
+    } else if (ivc.ratio != null) {
       ivState = ivc.ratio <= 1.15 ? "pass" : ivc.ratio <= 1.4 ? "warn" : "fail";
       details.push(`30-day IV ${ivc.iv30.toFixed(1)}% vs the stock's own 1-year realized volatility ${ivc.hv1y.toFixed(1)}% (ratio ${ivc.ratio.toFixed(2)}).`);
-      if (ivc.pctile != null) details.push(`IV is above ${ivc.pctile.toFixed(0)}% of the past year's 30-day realized-volatility readings (an IV-rank estimate).`);
+      if (ivc.pctile != null) details.push(`IV is above ${ivc.pctile.toFixed(0)}% of the past year's 30-day realized-volatility readings. This is an estimate of IV rank, not the real thing.`);
+      if (ivr) details.push(`Real IV rank starts once ${IV_RANK_MIN_DAYS} days of IV readings are saved for this stock (${ivr.days} so far).`);
     } else if (ivc.iv30 != null) {
       details.push(`30-day IV ${ivc.iv30.toFixed(1)}%. Not enough history to compare it with the stock's normal range.`);
     }
@@ -374,14 +400,22 @@ export function analyze(data, settings = {}) {
       details.unshift("Next earnings date not found. Look it up and enter it below before buying.");
       earnState = "warn";
     }
+    // A second source with a different date: the earlier of the two is the one that matters.
+    const alt = !settings.earningsOverride && data.earnings?.alt;
+    if (alt && ed && alt.date !== ed) {
+      const da = daysBetween(today, alt.date);
+      details.push(`${alt.source} lists the next report on ${fmtDate(alt.date)}, not ${fmtDate(ed)}. Confirm the date on the company's investor relations page and enter it below.`);
+      if (da >= 0 && da <= 30 && earnState === "pass") earnState = "warn";
+    }
     const state = worst(ivState === "info" ? "pass" : ivState, earnState === "info" ? "pass" : earnState);
     const summary =
       earnState === "fail" ? "Earnings are close. Wait until after the report."
       : earnToday === "unknown" ? "Earnings are today. Check whether the report is already out."
-      : ivState === "fail" ? "Options are priced well above the stock's normal volatility."
-      : ivState === "warn" ? "IV is somewhat elevated versus normal."
+      : ivState === "fail" ? (realRank ? "IV is high for this stock: near the top of its saved range." : "Options are priced well above the stock's normal volatility.")
+      : ivState === "warn" ? (realRank ? "IV is in the upper half of its saved range." : "IV is somewhat elevated versus normal.")
+      : earnState === "warn" && alt && alt.date !== ed && daysBetween(today, ed) > 30 ? "The two earnings-date sources disagree. Confirm the date."
       : earnState === "warn" ? (ed ? "Earnings within a month; buying after the report is usually cheaper." : "Earnings date unknown.")
-      : ivState === "pass" ? (earnToday === "reported" ? "Earnings came out this morning, and IV is near or below normal." : "IV is near or below the stock's normal volatility.")
+      : ivState === "pass" ? (earnToday === "reported" ? "Earnings came out this morning, and IV is near or below normal." : realRank ? "IV is in the lower half of its saved range." : "IV is near or below the stock's normal volatility.")
       : "IV couldn't be compared with history.";
     add(4, "Implied volatility", "IV low or normal, no earnings soon", state, summary, details);
     checks[3].ivState = ivState;
@@ -407,6 +441,23 @@ export function analyze(data, settings = {}) {
     q.items.push(`Recent headlines to read before buying: ${risky.slice(0, 2).map((n) => `"${n.title}" (${n.publisher || "news"}, ${fmtDate(n.time.slice(0, 10))})`).join("; ")}.`);
   } else if (data.news) {
     q.items.push(recent.length ? `No warning signs in the last week's ${recent.length} headline${recent.length === 1 ? "" : "s"} (keyword scan). Skim them in the stock card.` : "No headlines in the last week.");
+  }
+  const deals = recent.filter((n) => n.tags.includes("deal"));
+  if (deals.length) {
+    q.state = worst(q.state, "warn");
+    q.items.push(`Merger, takeover or restructuring news: "${deals[0].title}" (${deals[0].publisher || "news"}, ${fmtDate(deals[0].time.slice(0, 10))}). A pending deal can cap the share price and leave a long-dated call with little upside, so read up before buying.`);
+  }
+  // Kinds of stock where a rules screen is least reliable.
+  const fu = data.fundamentals;
+  if (fu && !data.isIndex && fu.quoteType !== "ETF") {
+    if (fu.marketCap != null && fu.marketCap < 2e9) {
+      q.state = worst(q.state, "warn");
+      q.items.push(`Small company: market value ${fmtCap(fu.marketCap)}, under $2B. Small caps swing harder and their options trade thinner, so treat this screen as a rough first look.`);
+    }
+    if (/biotech/i.test(fu.industry || "")) {
+      q.state = worst(q.state, "warn");
+      q.items.push("Biotech: a single trial result or FDA decision can move the stock 50% in a day, and price rules can't see that coming.");
+    }
   }
   const exd = data.fundamentals?.exDividendDate;
   if (exd && daysBetween(today, exd) >= 0 && daysBetween(today, exd) <= 30) {

@@ -97,6 +97,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .nogo .badge { background: var(--fail-bg); color: var(--fail); }
 .sub { color: var(--muted); font-size: .92rem; }
 .reasons { margin: 0; padding-left: 1.2em; display: grid; gap: 4px; }
+.v-meaning { margin: 10px 0 0; font-size: .88rem; color: var(--muted); }
 .diff { font-size: .92rem; padding: 10px 12px; border-radius: 8px; background: var(--info-bg); }
 
 .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }

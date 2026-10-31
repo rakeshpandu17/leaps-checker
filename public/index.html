@@ -81,6 +81,7 @@
         </div>
       </div>
       <ul class="reasons" id="vReasons"></ul>
+      <p class="v-meaning" id="vMeaning"></p>
       <p class="diff" id="vDiff" hidden></p>
       <p class="diff pick" id="vPick" hidden><span id="vPickText"></span> <button type="button" id="pickReset">Back to the best fit</button></p>
     </div>
@@ -139,7 +140,7 @@
         <li><strong>You are responsible for your trades.</strong> By using this page you accept that any decision you make is your own, and that the author is not liable for any loss.</li>
       </ul>
     </section>
-    <p>Data: Cboe delayed quotes (about 15 minutes late) for price, option chain, Greeks and history; Yahoo Finance and Nasdaq for earnings dates and company figures. Free sources have no IV history, so the IV check compares today's implied volatility with the stock's own realized volatility as an estimate of IV rank.</p>
+    <p>Data: Cboe delayed quotes (about 15 minutes late) for price, option chain, Greeks and history; Yahoo Finance and Nasdaq for earnings dates and company figures. Free sources have no IV history, so the daily scan saves each scanned stock's implied volatility. Once 40 days are saved, the IV check uses a real IV rank from those readings; until then it compares today's implied volatility with the stock's own realized volatility as an estimate.</p>
   </footer>
 </div>
 <script type="module" src="app.js"></script>
