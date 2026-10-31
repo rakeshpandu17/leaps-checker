@@ -243,6 +243,66 @@ async function fetchNasdaqEarnings(fetchFn, ticker, todayISO) {
   return date ? { date, timing: parseNasdaqTiming(json) } : null;
 }
 
+// ---------- SEC EDGAR (past earnings report dates) ----------
+
+// US companies file an 8-K with Item 2.02 ("Results of Operations") on the day they release earnings, so EDGAR is
+// an official record of when each past report came out. Right after a report, Yahoo and Nasdaq often list no next
+// date for weeks; the past dates show the company's own rhythm, which gives a fair estimate of the next one.
+const SEC_UA = "LEAPS-Checker/1.0 (https://leaps-startegy-checker.rakeshpandu17.workers.dev)";
+let secTickers = null; // { at, promise } of ticker -> CIK, reused for a day
+async function secCik(fetchFn, ticker) {
+  if (!secTickers || Date.now() - secTickers.at > 86400000) {
+    const promise = getJSON(fetchFn, "https://www.sec.gov/files/company_tickers.json", { headers: { "User-Agent": SEC_UA } })
+      .then((j) => {
+        const m = new Map();
+        for (const r of Object.values(j || {})) if (r && r.ticker) m.set(String(r.ticker).toUpperCase(), r.cik_str);
+        return m;
+      });
+    secTickers = { at: Date.now(), promise };
+    promise.catch(() => { secTickers = null; });
+  }
+  const m = await secTickers.promise;
+  return m.get(ticker.replace(".", "-")) ?? m.get(ticker) ?? null;
+}
+
+// Report dates (newest first) from EDGAR's filing list: 8-Ks that include Item 2.02.
+// EDGAR's acceptance time is New York time, which shows whether the release came before the open or after the close.
+export function parseSecEarnings(json, todayISO) {
+  const r = (json && json.filings && json.filings.recent) || {};
+  const out = [];
+  const seen = new Set();
+  (r.form || []).forEach((form, i) => {
+    if (form !== "8-K" || !/(^|,)\s*2\.02/.test((r.items || [])[i] || "")) return;
+    const date = (r.filingDate || [])[i];
+    if (!date || date > todayISO || seen.has(date)) return;
+    seen.add(date);
+    const m = /T(\d{2}):(\d{2})/.exec((r.acceptanceDateTime || [])[i] || "");
+    const h = m ? +m[1] + +m[2] / 60 : null;
+    out.push({ date, timing: h == null ? null : h < 9.5 ? "before-open" : h >= 16 ? "after-close" : null });
+  });
+  return out.sort((a, b) => (a.date < b.date ? 1 : -1));
+}
+
+// Next report estimated from the typical gap between the last few reports (about 91 days for most companies).
+export function estimateNextEarnings(reports) {
+  if (!reports || !reports.length) return null;
+  const ds = reports.slice(0, 5).map((r) => r.date);
+  const gaps = [];
+  for (let i = 0; i + 1 < ds.length; i++) gaps.push(daysBetween(ds[i + 1], ds[i]));
+  const ok = gaps.filter((g) => g >= 60 && g <= 120).sort((a, b) => a - b);
+  const gap = ok.length ? ok[Math.floor(ok.length / 2)] : 91;
+  const t = new Date(Date.parse(ds[0] + "T00:00:00Z") + gap * 86400000);
+  return t.toISOString().slice(0, 10);
+}
+
+async function fetchSecEarnings(fetchFn, ticker, todayISO) {
+  const cik = await secCik(fetchFn, ticker);
+  if (!cik) return null;
+  const json = await getJSON(fetchFn, `https://data.sec.gov/submissions/CIK${String(cik).padStart(10, "0")}.json`, { headers: { "User-Agent": SEC_UA } });
+  const reports = parseSecEarnings(json, todayISO);
+  return reports.length ? { reports, nextEstimate: estimateNextEarnings(reports) } : null;
+}
+
 // ---------- Ticker search (autocomplete) ----------
 
 const SEARCH_TYPES = { EQUITY: "Stock", ETF: "ETF", INDEX: "Index" };
@@ -337,7 +397,7 @@ export async function gatherData(ticker, { fetchFn = fetch, now = new Date() } =
   const sym = cboeSymbol(ticker);
   const notes = [];
 
-  const [chainR, quoteR, histR, yahooR, newsR, nasdaqR] = await Promise.allSettled([
+  const [chainR, quoteR, histR, yahooR, newsR, nasdaqR, secR] = await Promise.allSettled([
     getJSON(fetchFn, `${CBOE}/options/${sym}.json`),
     getJSON(fetchFn, `${CBOE}/quotes/${sym}.json`),
     getJSON(fetchFn, `${CBOE}/charts/historical/${sym}.json`),
@@ -345,6 +405,7 @@ export async function gatherData(ticker, { fetchFn = fetch, now = new Date() } =
     fetchNews(fetchFn, ticker, now.getTime()),
     // Second source for the earnings date, to catch the two sources disagreeing.
     INDEXES.has(ticker) ? Promise.resolve(null) : fetchNasdaqEarnings(fetchFn, ticker, todayISO),
+    INDEXES.has(ticker) ? Promise.resolve(null) : fetchSecEarnings(fetchFn, ticker, todayISO),
   ]);
 
   if (chainR.status === "rejected") {
@@ -381,13 +442,26 @@ export async function gatherData(ticker, { fetchFn = fetch, now = new Date() } =
     else if (!earningsTiming) earningsTiming = nasdaq.timing;
   }
 
+  // Last report from SEC filings; and when no source lists the next date yet, an estimate from past reports.
+  const sec = secR.status === "fulfilled" ? secR.value : null;
+  const lastReport = sec ? { ...sec.reports[0], source: "SEC filings" } : null;
+  let earningsEstimated = false;
+  if (!earningsDate && sec && sec.nextEstimate && sec.nextEstimate >= todayISO) {
+    earningsDate = sec.nextEstimate;
+    earningsTiming = null;
+    earningsSource = "Estimate from past SEC filings";
+    earningsEstimated = true;
+  }
+
   const news = newsR.status === "fulfilled" ? newsR.value : null;
   if (!news) notes.push("News headlines (Yahoo Finance) didn't load.");
 
   // If the report is today and a results headline already came out today, the numbers are public.
   const nyDate = (iso) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(new Date(iso));
-  const reportedToday = !!(earningsDate && news && earningsDate === nyDate(now.toISOString()) &&
-    news.some((n) => n.tags.includes("results") && nyDate(n.time) === earningsDate));
+  const nyToday = nyDate(now.toISOString());
+  const reportedToday = !!(earningsDate && earningsDate === nyToday && (
+    (lastReport && lastReport.date === nyToday) ||
+    (news && news.some((n) => n.tags.includes("results") && nyDate(n.time) === earningsDate))));
 
   const price = quote.price ?? chain.underlying.price ?? (history.length ? history[history.length - 1].c : null);
   if (!price) return { ok: false, ticker, error: `Couldn't get a current price for ${ticker}.` };
@@ -409,7 +483,7 @@ export async function gatherData(ticker, { fetchFn = fetch, now = new Date() } =
     calls,
     history,
     fundamentals,
-    earnings: { date: earningsDate || null, timing: earningsTiming, source: earningsSource, alt: earningsAlt, reportedToday },
+    earnings: { date: earningsDate || null, timing: earningsTiming, source: earningsSource, estimated: earningsEstimated, alt: earningsAlt, last: lastReport, reportedToday },
     news,
     notes,
   };

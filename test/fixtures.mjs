@@ -47,7 +47,7 @@ export const yahoo = (earnTs = Date.parse("2026-10-27T12:00:00Z") / 1000) => ({ 
 // A fetch stand-in that routes URLs to fixtures.
 export function mockFetch(over = {}) {
   const routes = {
-    options: () => chain(), quotes: () => quote(), historical: () => history(), yahoo: () => yahoo(), nasdaq: () => ({ data: { announcement: "Earnings announcement* for SOFI: Oct 27, 2026" } }), search: () => searchFixture, ...over,
+    options: () => chain(), quotes: () => quote(), historical: () => history(), yahoo: () => yahoo(), nasdaq: () => ({ data: { announcement: "Earnings announcement* for SOFI: Oct 27, 2026" } }), search: () => searchFixture, secTickers: () => null, secSubs: () => null, ...over,
   };
   const resp = (body, status = 200, headers = {}) => new Response(typeof body === "string" ? body : JSON.stringify(body), { status, headers });
   return async (url) => {
@@ -61,6 +61,7 @@ export function mockFetch(over = {}) {
     if (url.includes("quoteSummary")) return pick("yahoo");
     if (url.includes("/finance/search")) return pick("search");
     if (url.includes("nasdaq.com")) return pick("nasdaq");
+    if (url.includes("sec.gov")) return pick(url.includes("company_tickers") ? "secTickers" : "secSubs");
     return resp("unknown", 404);
   };
 }

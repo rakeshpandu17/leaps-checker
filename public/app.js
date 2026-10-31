@@ -288,13 +288,19 @@ function render() {
     `How much the stock actually swung over the past year, as a yearly figure. If 30-day IV is well above this, options are pricier than usual.`);
   const ed = settings().earningsOverride || data.earnings.date;
   const edDays = ed ? daysBetween(data.today, ed) : null;
-  srow("Next earnings", ed ? fmtDate(ed) : data.isIndex ? "n/a" : "not found",
+  const est = !settings().earningsOverride && data.earnings.estimated;
+  srow("Next earnings", ed ? (est ? "about " : "") + fmtDate(ed) : data.isIndex ? "n/a" : "not found",
     data.isIndex ? "Indexes don't report earnings."
+      : est ? "Not announced yet. This date is estimated from the company's past report dates in its SEC filings, so it can be off by a week or two. Options are usually expensive just before earnings and get cheaper right after."
       : ed ? `The next scheduled earnings report${settings().earningsOverride ? " (the date you entered)" : data.earnings.source ? `, from ${data.earnings.source}` : ""}. Options are usually expensive just before earnings and get cheaper right after, so it's often better to buy after the report.`
       : "We couldn't find the next earnings date. Look it up and enter it in the box below, so the IV check can use it.",
     edDays === 0 ? (ed === data.earnings.date && data.earnings.timing === "before-open" ? "today, before the open"
       : ed === data.earnings.date && data.earnings.timing === "after-close" ? "today, after the close" : "today")
       : edDays != null && edDays > 0 ? `in ${edDays} day${edDays === 1 ? "" : "s"}` : null);
+  const lr = data.earnings.last;
+  if (lr && daysBetween(lr.date, data.today) >= 0 && daysBetween(lr.date, data.today) <= 120) srow("Last earnings", fmtDate(lr.date),
+    "When the company last released quarterly results, from its SEC filing (an 8-K with Item 2.02).",
+    daysBetween(lr.date, data.today) === 0 ? "today" : `${daysBetween(lr.date, data.today)} days ago`);
   if (f.exDividendDate && daysBetween(data.today, f.exDividendDate) >= 0) srow("Ex-dividend", fmtDate(f.exDividendDate),
     "The first day the stock trades without its next dividend. The price usually drops by about the dividend that day. Call holders don't receive dividends.",
     `in ${daysBetween(data.today, f.exDividendDate)} days`);

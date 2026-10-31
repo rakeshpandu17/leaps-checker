@@ -371,7 +371,15 @@ export function analyze(data, settings = {}) {
     // The report time only applies to the date it came with, not to a date the user typed.
     const timing = !settings.earningsOverride || settings.earningsOverride === data.earnings?.date ? data.earnings?.timing : null;
     let earnToday = null;
-    if (ed) {
+    const last = data.earnings?.last;
+    const lastAgo = last ? daysBetween(last.date, today) : null;
+    const lastText = last && lastAgo >= 0 ? `Last reported ${fmtDate(last.date)}${lastAgo === 0 ? " (today)" : ` (${lastAgo} day${lastAgo === 1 ? "" : "s"} ago)`}, per its SEC filing.` : "";
+    if (ed && !settings.earningsOverride && data.earnings?.estimated) {
+      // No source lists the next date yet (usual right after a report): the date is estimated from past reports.
+      const dn = daysBetween(today, ed);
+      earnState = dn > 30 ? "pass" : "warn";
+      details.unshift(`The next report date isn't announced yet. ${lastText} Based on its past reports, the next one should come around ${fmtDate(ed)}, about ${dn} days away. This is an estimate: check the company's investor relations page as it gets closer.`.replace(/\s+/g, " "));
+    } else if (ed) {
       const dn = daysBetween(today, ed);
       const newsSaysOut = !settings.earningsOverride && data.earnings?.reportedToday;
       if (dn === 0 && (timing === "before-open" || newsSaysOut)) {
@@ -394,10 +402,10 @@ export function analyze(data, settings = {}) {
         details.unshift(`Earnings on ${fmtDate(ed)}, in ${dn} days.`);
       } else if (dn > 30) {
         earnState = "pass";
-        details.unshift(`Next earnings ${fmtDate(ed)} (${dn} days away).`);
+        details.unshift(`Next earnings ${fmtDate(ed)} (${dn} days away).` + (lastText ? " " + lastText : ""));
       }
     } else if (!data.isIndex) {
-      details.unshift("Next earnings date not found. Look it up and enter it below before buying.");
+      details.unshift(`Next earnings date not found. ${lastText} Look it up and enter it below before buying.`.replace(/\s+/g, " "));
       earnState = "warn";
     }
     // A second source with a different date: the earlier of the two is the one that matters.

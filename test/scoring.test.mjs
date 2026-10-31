@@ -265,3 +265,28 @@ test("scan saves one IV reading per day per ticker", async () => {
   assert.deepEqual(h.dates, ["2026-11-02", "2026-11-03"]);
   assert.deepEqual(h.iv, { AAA: [31, 33], BBB: [40, null], CCC: [null, 20] });
 });
+
+test("SEC filings: last report date, and an estimate when no next date is listed", async () => {
+  const { parseSecEarnings, estimateNextEarnings } = await import("../functions/_lib/data.js");
+  const subs = { filings: { recent: {
+    form: ["4", "8-K", "10-Q", "8-K", "8-K", "8-K", "8-K"],
+    items: ["", "2.02,9.01", "", "5.07", "2.02,9.01", "2.02,9.01", "2.02,9.01"],
+    filingDate: ["2026-10-22", "2026-10-21", "2026-10-21", "2026-08-15", "2026-07-22", "2026-04-23", "2026-01-22"],
+    acceptanceDateTime: ["", "2026-10-21T07:02:11.000Z", "", "", "2026-07-22T16:05:00.000Z", "2026-04-23T06:59:00.000Z", "2026-01-22T07:00:00.000Z"],
+  } } };
+  const reps = parseSecEarnings(subs, TODAY);
+  assert.deepEqual(reps.map((r) => r.date), ["2026-10-21", "2026-07-22", "2026-04-23", "2026-01-22"]);
+  assert.equal(reps[0].timing, "before-open");
+  assert.equal(reps[1].timing, "after-close");
+  assert.equal(estimateNextEarnings(reps), "2027-01-20"); // median gap 91 days
+  // Yahoo and Nasdaq list nothing upcoming (the usual state right after a report): the estimate is used.
+  const noNext = { yahoo: () => yahoo(Date.parse("2026-10-21T11:00:00Z") / 1000), nasdaq: () => ({ data: { announcement: "Earnings announcement* for SOFI: Oct 21, 2026" } }),
+    secTickers: () => ({ 0: { cik_str: 1818874, ticker: "SOFI", title: "SoFi Technologies, Inc." } }), secSubs: () => subs };
+  const d = await get(noNext);
+  assert.equal(d.earnings.date, "2027-01-20");
+  assert.equal(d.earnings.estimated, true);
+  assert.equal(d.earnings.last.date, "2026-10-21");
+  const a = analyze(d);
+  assert.equal(a.checks[3].earnState, "pass");
+  assert.ok(/isn't announced yet\. Last reported Oct 21, 2026 \(2 days ago\), per its SEC filing\. Based on its past reports, the next one should come around Jan 20, 2027/.test(a.checks[3].details[0]), a.checks[3].details[0]);
+});
