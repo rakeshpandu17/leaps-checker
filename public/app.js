@@ -347,6 +347,8 @@ function render() {
 $("form").addEventListener("submit", (e) => {
   e.preventDefault();
   savePrefs();
+  // Analyzing a ticker folds the ideas list away, like opening one from the list does.
+  if (!$("ideas").hidden) setIdeasOpen(false);
   const typed = $("ticker").value.trim();
   // A highlighted suggestion wins; otherwise an exact ticker match, then the top suggestion that matches the text.
   const pick = combo.current() || combo.resolve(typed);
@@ -417,6 +419,9 @@ const combo = (() => {
   }
 
   function close() {
+    // Drop any search still in flight, so a late answer can't reopen the list.
+    clearTimeout(timer);
+    seq++;
     list.hidden = true;
     input.setAttribute("aria-expanded", "false");
     input.removeAttribute("aria-activedescendant");

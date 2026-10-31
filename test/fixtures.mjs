@@ -65,7 +65,8 @@ export function mockFetch(over = {}) {
   };
 }
 
-const ago = (h) => Math.round(Date.now() / 1000 - h * 3600);
+// Headline times are relative to the tests' fixed "now" (TODAY at 17:00 UTC), so results don't drift with the real date.
+const ago = (h) => Math.round(Date.parse(TODAY + "T17:00:00Z") / 1000 - h * 3600);
 export const newsFixture = [
   { title: "SoFi Technologies reports record third-quarter results, raises full-year outlook", publisher: "Business Wire", link: "https://example.com/sofi-q3", providerPublishTime: ago(3) },
   { title: "SoFi stock jumps after earnings beat", publisher: "Investor's Business Daily", link: "https://example.com/sofi-jumps", providerPublishTime: ago(2) },

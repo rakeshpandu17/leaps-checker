@@ -126,9 +126,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .th-tip { display: inline-flex; align-items: center; gap: 5px; }
 .th-tip .tip-btn { width: 16px; height: 16px; font-size: .62rem; letter-spacing: 0; text-transform: none; }
 .tip-box.float { display: block; }
-.news { display: grid; gap: 8px; padding-top: 10px; border-top: 1px dashed var(--line); }
-.news h4 { margin: 0; font: 600 .72rem/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
-.news ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; }
+.news ul { margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px 24px; }
 .news li { display: grid; gap: 3px; min-width: 0; }
 .news a { color: var(--ink); font-weight: 600; text-decoration: none; overflow-wrap: anywhere; }
 .news a:hover, .news a:focus-visible { color: var(--accent); text-decoration: underline; }
