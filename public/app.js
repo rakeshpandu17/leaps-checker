@@ -112,7 +112,7 @@ async function run(ticker, fromIdeas = false) {
   if (!ticker) return;
   ideaRef = fromIdeas ? ideaInfo.get(ticker) || null : null;
   pickedSymbol = null;
-  $("ticker").value = ticker;
+  setTickerBox(tickerLabel(ticker));
   $("go").disabled = true;
   $("earn").value = "";
   setStatus(`Loading ${ticker}: price, LEAPS chain, earnings date and company data…`);
@@ -126,6 +126,7 @@ async function run(ticker, fromIdeas = false) {
     }
     data = body;
     setStatus("");
+    setTickerBox(tickerLabel(ticker, body.fundamentals && body.fundamentals.name));
     const url = new URL(location.href);
     url.searchParams.set("t", ticker);
     history.replaceState(null, "", url);
@@ -383,6 +384,9 @@ $("form").addEventListener("submit", (e) => {
   // Analyzing a ticker folds the ideas list away, like opening one from the list does.
   if (!$("ideas").hidden) setIdeasOpen(false);
   const typed = $("ticker").value.trim();
+  // The box shows "Company (TICKER)" after a check; analyzing it again uses the ticker in brackets.
+  const shown = /\(([A-Z0-9.^-]{1,10})\)\s*$/.exec(typed);
+  if (shown && !combo.current()) { combo.close(); return run(shown[1]); }
   // A highlighted suggestion wins; otherwise an exact ticker match, then the top suggestion that matches the text.
   const pick = combo.current() || combo.resolve(typed);
   combo.close();
@@ -390,6 +394,20 @@ $("form").addEventListener("submit", (e) => {
 });
 
 // ---------- ticker autocomplete ----------
+
+// What the ticker box shows: "SoFi Technologies, Inc. (SOFI)", so the ticker is easy to read.
+function tickerLabel(sym, name) {
+  const n = name || NAMES[sym] || null;
+  return n && n.toUpperCase() !== sym ? `${n} (${sym})` : sym;
+}
+
+// Fill the box with a label; the first click or keypress in it then replaces the whole label.
+function setTickerBox(text) {
+  const box = $("ticker");
+  box.value = text;
+  box.dataset.label = "1";
+  if (document.activeElement === box) box.select();
+}
 
 // Typed text -> ticker: "sofi" -> "SOFI"; a company name that matches one known name exactly -> its ticker.
 function toSymbol(text) {
@@ -486,13 +504,17 @@ const combo = (() => {
   function choose(i) {
     const it = items[i];
     if (!it) return;
-    input.value = it.symbol;
+    setTickerBox(tickerLabel(it.symbol, it.name));
     close();
     savePrefs();
     run(it.symbol);
   }
 
-  input.addEventListener("input", update);
+  input.addEventListener("input", () => { delete input.dataset.label; update(); });
+  // Clicking into a "Company (TICKER)" label selects it all, so typing a new ticker replaces it.
+  const selectLabel = () => { if (input.dataset.label) setTimeout(() => input.select(), 0); };
+  input.addEventListener("focus", selectLabel);
+  input.addEventListener("click", selectLabel);
   input.addEventListener("focus", () => { if (input.value.trim() && document.activeElement === input && items.length) render(input.value.trim()); });
   input.addEventListener("blur", () => setTimeout(close, 120));
   input.addEventListener("keydown", (e) => {
@@ -505,7 +527,7 @@ const combo = (() => {
     } else if (e.key === "Escape") {
       close();
     } else if (e.key === "Tab" && active >= 0) {
-      input.value = items[active].symbol;
+      setTickerBox(tickerLabel(items[active].symbol, items[active].name));
       close();
     }
   });

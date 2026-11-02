@@ -290,3 +290,14 @@ test("SEC filings: last report date, and an estimate when no next date is listed
   assert.equal(a.checks[3].earnState, "pass");
   assert.ok(/isn't announced yet\. Last reported Oct 21, 2026 \(2 days ago\), per its SEC filing\. Based on its past reports, the next one should come around Jan 20, 2027/.test(a.checks[3].details[0]), a.checks[3].details[0]);
 });
+
+test("IV history skips weekends and drops weekend readings already saved", async () => {
+  const { addIvReadings } = await import("../scripts/nightly-scan.mjs");
+  const old = { dates: ["2026-10-30", "2026-11-01"], iv: { AAA: [30, 31] } };
+  const sun = addIvReadings(old, { stocks: { AAA: { iv30: 32 } } }, new Date("2026-11-01T16:00:00Z"));
+  assert.deepEqual(sun.dates, ["2026-10-30"]);
+  assert.deepEqual(sun.iv, { AAA: [30] });
+  const mon = addIvReadings(old, { stocks: { AAA: { iv30: 33 } } }, new Date("2026-11-02T16:00:00Z"));
+  assert.deepEqual(mon.dates, ["2026-10-30", "2026-11-02"]);
+  assert.deepEqual(mon.iv, { AAA: [30, 33] });
+});

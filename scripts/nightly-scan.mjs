@@ -104,9 +104,17 @@ export async function scan(tickers, { fetchFn = fetch, now = new Date(), log = c
 // Shape: { updated, dates: [ISO date...], iv: { TICKER: [iv30 or null, aligned with dates] } }.
 export function addIvReadings(hist, result, now = new Date()) {
   const day = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(now);
-  const dates = [...((hist && hist.dates) || [])];
+  // Markets are closed on weekends, so a weekend scan only repeats Friday's IV: keep weekdays only.
+  const weekday = (d) => { const w = new Date(d + "T12:00:00Z").getUTCDay(); return w >= 1 && w <= 5; };
+  const keep = ((hist && hist.dates) || []).map((d, i) => [d, i]).filter(([d]) => weekday(d));
+  const dates = keep.map(([d]) => d);
   const iv = {};
-  for (const [t, xs] of Object.entries((hist && hist.iv) || {})) iv[t] = [...xs];
+  for (const [t, xs] of Object.entries((hist && hist.iv) || {})) iv[t] = keep.map(([, i]) => xs[i] ?? null);
+  if (!weekday(day)) {
+    const out = { updated: (hist && hist.updated) || now.toISOString(), dates, iv: {} };
+    for (const [t, xs] of Object.entries(iv)) if (xs.some((x) => x != null)) out.iv[t] = xs;
+    return out;
+  }
   let col = dates.indexOf(day);
   if (col < 0) {
     dates.push(day);

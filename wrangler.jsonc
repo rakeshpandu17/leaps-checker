@@ -6,7 +6,8 @@
   "compatibility_date": "2025-09-01",
   "assets": { "directory": "./public", "binding": "ASSETS" },
   // Start the stock scan on time, in UTC: 15:00 (11 am EDT / 10 am EST) and 23:00 (7 pm EDT / 6 pm EST), weekdays.
-  "triggers": { "crons": ["0 15 * * 1-5", "0 23 * * 1-5"] },
+  // Day names on purpose: Cloudflare counts weekdays from 1 = Sunday, so "1-5" would mean Sunday to Thursday.
+  "triggers": { "crons": ["0 15 * * MON-FRI", "0 23 * * MON-FRI"] },
   // Builds of other branches (like release/v1.0) run `wrangler preview`, which needs this block.
   "previews": {}
 }
