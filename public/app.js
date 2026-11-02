@@ -107,9 +107,13 @@ async function withIvHist(d) {
   return d;
 }
 
+// Each check gets a number; only the latest one may draw the results. Without this, a slow earlier check
+// (like the last ticker reloading when the page opens) could land after a newer one and show the wrong stock.
+let runSeq = 0;
 async function run(ticker, fromIdeas = false) {
   ticker = String(ticker || "").trim().toUpperCase();
   if (!ticker) return;
+  const my = ++runSeq;
   ideaRef = fromIdeas ? ideaInfo.get(ticker) || null : null;
   pickedSymbol = null;
   setTickerBox(tickerLabel(ticker));
@@ -118,6 +122,7 @@ async function run(ticker, fromIdeas = false) {
   setStatus(`Loading ${ticker}: price, LEAPS chain, earnings date and company data…`);
   try {
     const body = await fetchAnalysis(ticker);
+    if (my !== runSeq) return;
     if (!body.ok) {
       data = null;
       $("result").hidden = true;
@@ -134,9 +139,9 @@ async function run(ticker, fromIdeas = false) {
     render();
     if (fromIdeas) $("result").scrollIntoView({ behavior: "smooth", block: "start" });
   } catch (e) {
-    setStatus(`Couldn't reach the data service: ${e.message}`, true);
+    if (my === runSeq) setStatus(`Couldn't reach the data service: ${e.message}`, true);
   } finally {
-    $("go").disabled = false;
+    if (my === runSeq) $("go").disabled = false;
   }
 }
 
