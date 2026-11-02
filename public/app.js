@@ -389,8 +389,8 @@ $("form").addEventListener("submit", (e) => {
   // Analyzing a ticker folds the ideas list away, like opening one from the list does.
   if (!$("ideas").hidden) setIdeasOpen(false);
   const typed = $("ticker").value.trim();
-  // The box shows "Company (TICKER)" after a check; analyzing it again uses the ticker in brackets.
-  const shown = /\(([A-Z0-9.^-]{1,10})\)\s*$/.exec(typed);
+  // The box shows "TICKER (Company)" after a check; analyzing it again uses the ticker in front.
+  const shown = /^([A-Z0-9.^-]{1,10}) \(.+\)$/.exec(typed);
   if (shown && !combo.current()) { combo.close(); return run(shown[1]); }
   // A highlighted suggestion wins; otherwise an exact ticker match, then the top suggestion that matches the text.
   const pick = combo.current() || combo.resolve(typed);
@@ -400,13 +400,13 @@ $("form").addEventListener("submit", (e) => {
 
 // ---------- ticker autocomplete ----------
 
-// What the ticker box shows: "SoFi Technologies, Inc. (SOFI)", so the ticker is easy to read.
+// What the ticker box shows: "SMH (VanEck Semiconductor ETF)", ticker first so it's easy to read.
 function tickerLabel(sym, name) {
   const n = name || NAMES[sym] || null;
-  return n && n.toUpperCase() !== sym ? `${n} (${sym})` : sym;
+  return n && n.toUpperCase() !== sym ? `${sym} (${n})` : sym;
 }
 
-// Fill the box with a label; the first click or keypress in it then replaces the whole label.
+// Fill the box with a label; the first click in it selects the whole label, so typing replaces it.
 function setTickerBox(text) {
   const box = $("ticker");
   box.value = text;
@@ -516,7 +516,7 @@ const combo = (() => {
   }
 
   input.addEventListener("input", () => { delete input.dataset.label; update(); });
-  // Clicking into a "Company (TICKER)" label selects it all, so typing a new ticker replaces it.
+  // Clicking into a "TICKER (Company)" label selects it all, so typing a new ticker replaces it.
   const selectLabel = () => { if (input.dataset.label) setTimeout(() => input.select(), 0); };
   input.addEventListener("focus", selectLabel);
   input.addEventListener("click", selectLabel);
