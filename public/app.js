@@ -191,7 +191,7 @@ function render() {
   $("vSub").textContent =
     `${data.ticker} ${fmt$(data.price)}` +
     (data.changePct != null ? ` (${fmtPct(data.changePct, 2)} today)` : "") +
-    ` · data as of ${data.asOf} ET, delayed`;
+    ` · data as of ${fmtAsOf(data.asOf)}, delayed`;
   const ul = $("vReasons");
   ul.replaceChildren();
   const reasons = v.reasons.length ? v.reasons : ["All core checks pass. Keep it small and follow the exit plan."];
@@ -399,6 +399,14 @@ $("form").addEventListener("submit", (e) => {
 });
 
 // ---------- ticker autocomplete ----------
+
+// Cboe stamps quotes in UTC ("2026-11-02 23:34:23"); show that moment in New York time.
+function fmtAsOf(asOf) {
+  const m = /^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}(?::\d{2})?)/.exec(String(asOf || ""));
+  const t = m ? Date.parse(`${m[1]}T${m[2]}Z`) : Date.parse(asOf);
+  if (!isFinite(t)) return String(asOf || "unknown time");
+  return new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }).format(new Date(t)) + " ET";
+}
 
 // What the ticker box shows: "SMH (VanEck Semiconductor ETF)", ticker first so it's easy to read.
 function tickerLabel(sym, name) {
