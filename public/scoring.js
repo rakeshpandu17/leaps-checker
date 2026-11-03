@@ -511,6 +511,7 @@ export function analyze(data, settings = {}) {
   return {
     checks, best, picked: !!picked, topPick: ranked[0] || null, alternatives: pickAlternatives(ranked, best), trend, ivc,
     projection: projection(data, best),
+    pmcc: pmcc(data, best, settings),
     overBudget: settings.maxCost > 0 && !ranked.length && allRanked.length > 0,
     verdict: verdict(checks, best, data),
   };
@@ -580,4 +581,100 @@ export function verdict(checks, best, data) {
     headline = cautions.length ? `Go on ${data.ticker}, with care` : `Go on ${data.ticker}`;
   }
   return { level, headline, reasons: [...noGo, ...wait, ...cautions] };
+}
+
+// ---------- Poor man's covered call (PMCC) ----------
+// Own the LEAPS (the long leg) and sell a short-dated, out-of-the-money call against it each month or so,
+// like a covered call but with the LEAPS standing in for 100 shares.
+// Short leg target: 30 to 45 days out, delta 0.20 to 0.30.
+export function pickShortCall(data, best) {
+  const S = data.price, today = data.today;
+  const pool = enrichCalls(data.shortCalls || [], S, today)
+    .filter((c) => c.strike > S && c.bid > 0 && c.ask > 0 && c.delta != null && c.dte >= 14 && c.dte <= 60 && (!best || c.expiry < best.expiry));
+  const score = (c) => {
+    const dDays = c.dte < 30 ? 30 - c.dte : c.dte > 45 ? c.dte - 45 : 0;
+    const dDelta = Math.abs(c.delta - 0.25);
+    return dDays / 15 + dDelta / 0.05 + ((c.spreadPct ?? 100) > 15 ? 1 : 0) + (c.oi < 100 ? 1 : 0);
+  };
+  return pool.sort((a, b) => score(a) - score(b));
+}
+
+export function pmcc(data, best, settings = {}) {
+  if (!best || !data.shortCalls) return null;
+  const ranked = pickShortCall(data, best);
+  if (!ranked.length) {
+    return { level: "nogo", headline: "No short call to sell", reasons: ["No call 2 to 8 weeks out, above today's price, has a live bid. A PMCC needs one to sell each month."], rules: [], short: null, alternatives: [] };
+  }
+  const sc = ranked[0];
+  const S = data.price, today = data.today;
+  const rules = [];
+  const add = (title, state, text) => rules.push({ title, state, text });
+
+  add("Long leg: deep in-the-money LEAPS",
+    best.delta >= 0.75 ? "pass" : best.delta >= 0.7 ? "warn" : "fail",
+    `The ${fmtDate(best.expiry)} $${best.strike} LEAPS has delta ${best.delta.toFixed(2)}. A PMCC wants 0.75 or more, so the LEAPS moves almost like the shares.`);
+
+  const okDays = sc.dte >= 30 && sc.dte <= 45, okDelta = sc.delta >= 0.2 && sc.delta <= 0.3;
+  add("Short leg: 30 to 45 days, delta 0.20 to 0.30",
+    okDays && okDelta ? "pass" : sc.delta <= 0.4 ? "warn" : "fail",
+    `Sell the ${fmtDate(sc.expiry)} $${sc.strike} call (${sc.dte} days, delta ${sc.delta.toFixed(2)}). That's roughly a ${Math.round(sc.delta * 100)}% chance the stock ends above the strike.`);
+
+  const netDebit = best.mid - sc.mid;
+  const width = sc.strike - best.strike;
+  add("Width covers the cost",
+    width > netDebit ? "pass" : "fail",
+    width > netDebit
+      ? `Strike gap ${fmt$(width)} is more than the net cost ${fmt$(netDebit)} per share, so if the stock jumps past ${fmt$(sc.strike)} and you close both legs, you still come out ahead (about ${fmt$((width - netDebit) * 100)} per contract or more).`
+      : `Strike gap ${fmt$(width)} is less than the net cost ${fmt$(netDebit)} per share. A big rally past ${fmt$(sc.strike)} would lock in a loss. Pick a higher short strike or a deeper LEAPS.`);
+
+  const decayPerMonth = best.extrinsic / Math.max(1, best.dte / 30);
+  const perMonth = sc.mid * (30 / sc.dte);
+  add("Income beats the LEAPS's time decay",
+    perMonth >= decayPerMonth * 1.5 ? "pass" : perMonth >= decayPerMonth ? "warn" : "fail",
+    `The short call pays ${fmt$(sc.mid)} (about ${fmt$(perMonth)} a month). The LEAPS loses about ${fmt$(decayPerMonth)} a month to time decay. That's ${fmtPct((perMonth / best.mid) * 100).replace("+", "")} of the LEAPS price a month.`);
+
+  // Cheap short calls have wide percentage spreads by nature, so a few cents counts as tight too.
+  const liq = (c) => {
+    const gap = c.ask - c.bid, pct = c.spreadPct ?? 100;
+    return (pct <= 10 || gap <= 0.05) && c.oi >= 100 ? "pass" : (pct <= 20 || gap <= 0.1) && c.oi >= 25 ? "warn" : "fail";
+  };
+  add("Both legs trade easily",
+    worst(liq(sc), best.grades?.liquidity === "fail" ? "fail" : best.grades?.liquidity === "warn" ? "warn" : "pass"),
+    `Short call: bid ${fmt$(sc.bid)} / ask ${fmt$(sc.ask)}, spread ${(sc.spreadPct ?? 0).toFixed(1)}% of mid, open interest ${sc.oi.toLocaleString("en-US")}. LEAPS spread ${(best.spreadPct ?? 0).toFixed(1)}%, open interest ${best.oi.toLocaleString("en-US")}. You'll trade the short leg every month, so a tight spread matters.`);
+
+  const f = data.fundamentals || {};
+  const exd = f.exDividendDate;
+  const divEst = f.dividendYield ? (f.dividendYield * S) / 4 : null;
+  if (exd && exd >= today && exd <= sc.expiry) {
+    const risky = divEst != null && sc.extrinsic < divEst * 1.5;
+    add("Early assignment (dividend)", risky ? "warn" : "pass",
+      `Goes ex-dividend ${fmtDate(exd)}, before the short call expires.` + (divEst ? ` The dividend is about ${fmt$(divEst)} a share.` : "") +
+      ` If the stock rises above ${fmt$(sc.strike)} and the call's time value drops below the dividend, it can be assigned the day before, and you'd owe the shares. Buy the short call back before then if that happens.`);
+  } else {
+    add("Early assignment (dividend)", "pass", "No ex-dividend date before the short call expires, so early assignment is unlikely.");
+  }
+
+  const ed = settings.earningsOverride || data.earnings?.date;
+  if (ed && ed >= today && ed <= sc.expiry) {
+    add("No earnings before the short call expires", "warn",
+      `Earnings ${data.earnings?.estimated && !settings.earningsOverride ? "expected around" : "on"} ${fmtDate(ed)}, before the short call expires. A big move on the report can blow past ${fmt$(sc.strike)}. Many traders sell an expiry that ends before earnings, or skip that month.`);
+  } else {
+    add("No earnings before the short call expires", "pass", ed ? `Next earnings ${fmtDate(ed)}, after the short call expires.` : "No earnings date found before the short call expires.");
+  }
+
+  const fails = rules.filter((r) => r.state === "fail"), warns = rules.filter((r) => r.state === "warn");
+  const level = fails.length ? "nogo" : warns.length >= 2 ? "wait" : "go";
+  const headline = level === "go" ? (warns.length ? "PMCC works here, with care" : "PMCC works here")
+    : level === "wait" ? "PMCC possible, but check the cautions" : "PMCC doesn't fit right now";
+  return {
+    level, headline, rules,
+    reasons: [...fails, ...warns].map((r) => `${r.title}: ${r.text}`),
+    short: sc,
+    netDebit,
+    width,
+    perMonth,
+    monthlyYieldPct: (perMonth / best.mid) * 100,
+    ifCalledAway: (width - netDebit) * 100,
+    alternatives: ranked.slice(1, 5),
+  };
 }

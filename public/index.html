@@ -107,6 +107,26 @@
 
     <section class="checks" id="checks" aria-label="The eight checks"></section>
 
+    <section class="card pmcc" id="pmccCard" aria-labelledby="pmccH" hidden>
+      <div class="pmcc-top">
+        <span class="eyebrow tip" id="pmccH">PMCC check: poor man's covered call
+          <button type="button" class="tip-btn" aria-label="What is a PMCC?" aria-describedby="pmccTip">?</button>
+          <span class="tip-box" role="tooltip" id="pmccTip">Buy the LEAPS above, then sell a short call 30 to 45 days out, above today's price, against it. The sale pays you income each month, like a covered call, but the LEAPS stands in for 100 shares at a fraction of the cost. If the stock rises past the short strike, your gains above it are capped until you buy the short call back or let it be assigned.</span>
+        </span>
+        <span class="pill" id="pmccBadge"></span>
+      </div>
+      <h3 id="pmccHead"></h3>
+      <div class="pmcc-grid">
+        <div class="pmcc-left">
+          <dl class="kv" id="pmccKv"></dl>
+          <ol class="pmcc-steps" id="pmccSteps"></ol>
+        </div>
+        <ul class="pmcc-rules" id="pmccRules"></ul>
+      </div>
+      <p class="news-note" id="pmccAlt"></p>
+      <p class="news-note">A PMCC adds a second trade with its own risks: the short call caps your upside, and you need to manage it every month. Prices are about 15 minutes delayed, so check both legs with your broker.</p>
+    </section>
+
     <section class="card news" aria-labelledby="newsH">
       <span class="eyebrow" id="newsH">Latest news</span>
       <ul id="newsList"></ul>

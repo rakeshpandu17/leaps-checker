@@ -7,6 +7,8 @@ const UA =
 const CBOE = "https://cdn.cboe.com/api/global/delayed_quotes";
 const INDEXES = new Set(["SPX", "NDX", "RUT", "VIX", "XSP", "DJX", "OEX", "XEO", "MRUT"]);
 const MIN_LEAPS_DAYS = 240; // keep a little below the 270-day floor so near-misses can be shown
+// Short-dated calls for the PMCC check (the call you sell against the LEAPS).
+const SHORT_MIN_DAYS = 14, SHORT_MAX_DAYS = 60;
 
 export function cleanTicker(raw) {
   const t = String(raw || "").trim().toUpperCase().replace(/^\^/, "").replace(/^\$/, "");
@@ -58,14 +60,16 @@ async function getJSON(fetchFn, url, init = {}) {
 export function normalizeChain(json, todayISO) {
   const opts = (json && json.data && json.data.options) || [];
   const calls = [];
+  const shortCalls = [];
   for (const o of opts) {
     const p = parseOccSymbol(o.option);
     if (!p || p.type !== "C") continue;
     const dte = daysBetween(todayISO, p.expiry);
-    if (dte < MIN_LEAPS_DAYS) continue;
+    const isShort = dte >= SHORT_MIN_DAYS && dte <= SHORT_MAX_DAYS;
+    if (dte < MIN_LEAPS_DAYS && !isShort) continue;
     const bid = num(o.bid) ?? 0;
     const ask = num(o.ask) ?? 0;
-    calls.push({
+    (isShort ? shortCalls : calls).push({
       symbol: o.option,
       expiry: p.expiry,
       dte,
@@ -85,6 +89,7 @@ export function normalizeChain(json, todayISO) {
   const d = (json && json.data) || {};
   return {
     calls,
+    shortCalls,
     expiriesAll: [...new Set(opts.map((o) => parseOccSymbol(o.option)?.expiry).filter(Boolean))].sort(),
     underlying: { price: num(d.current_price) ?? num(d.close), iv30: num(d.iv30) },
   };
@@ -468,6 +473,8 @@ export async function gatherData(ticker, { fetchFn = fetch, now = new Date() } =
 
   // Only in- or near-the-money calls can reach the 0.65+ delta range; drop the rest to keep the payload small.
   const calls = chain.calls.filter((c) => c.strike <= price * 1.1);
+  // For the PMCC: out-of-the-money calls up to 35% above the price, with a live bid.
+  const shortCalls = chain.shortCalls.filter((c) => c.strike > price && c.strike <= price * 1.35 && c.bid > 0);
 
   return {
     ok: true,
@@ -481,6 +488,7 @@ export async function gatherData(ticker, { fetchFn = fetch, now = new Date() } =
     iv30: quote.iv30 ?? chain.underlying.iv30 ?? null,
     lastExpiry: chain.expiriesAll[chain.expiriesAll.length - 1] || null,
     calls,
+    shortCalls,
     history,
     fundamentals,
     earnings: { date: earningsDate || null, timing: earningsTiming, source: earningsSource, estimated: earningsEstimated, alt: earningsAlt, last: lastReport, reportedToday },

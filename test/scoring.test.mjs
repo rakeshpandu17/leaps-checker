@@ -301,3 +301,20 @@ test("IV history skips weekends and drops weekend readings already saved", async
   assert.deepEqual(mon.dates, ["2026-10-30", "2026-11-02"]);
   assert.deepEqual(mon.iv, { AAA: [30, 33] });
 });
+
+test("PMCC: picks a 30-45 day short call near 0.25 delta and scores the rules", async () => {
+  const d = await get({ yahoo: () => yahoo(Date.parse("2027-01-28T12:00:00Z") / 1000), options: () => chain("SOFI", 14.77, 0.55, { expiries: ["2026-11-20", "2026-12-04", "2027-06-17", "2027-12-17", "2028-01-21"], strikes: [8, 9, 10, 11, 12, 15, 16, 17, 18, 19, 20] }) });
+  assert.ok(d.shortCalls.length > 0);
+  assert.ok(d.shortCalls.every((c) => c.strike > d.price && c.bid > 0));
+  const a = analyze(d, { portfolio: 50000 });
+  const p = a.pmcc;
+  assert.ok(p && p.short);
+  assert.ok(p.short.dte >= 28 && p.short.dte <= 45, String(p.short.dte));
+  assert.ok(p.short.delta > 0.1 && p.short.delta < 0.4, String(p.short.delta));
+  assert.equal(p.rules.length, 7);
+  assert.equal(p.rules.find((r) => r.title === "Width covers the cost").state, p.width > p.netDebit ? "pass" : "fail");
+  assert.ok(["go", "wait", "nogo"].includes(p.level));
+  // No short-dated calls: the PMCC says so.
+  const none = analyze({ ...d, shortCalls: [] }, {});
+  assert.equal(none.pmcc.level, "nogo");
+});

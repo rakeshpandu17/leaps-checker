@@ -145,6 +145,47 @@ async function run(ticker, fromIdeas = false) {
   }
 }
 
+// Poor man's covered call: the LEAPS above as the long leg, plus a short call to sell against it.
+const PMCC_BADGE = { go: ["Fits", "pass"], wait: ["Check", "warn"], nogo: ["Doesn't fit", "fail"] };
+function renderPmcc(a) {
+  const card = $("pmccCard");
+  const p = a.pmcc;
+  card.hidden = !p;
+  if (!p) return;
+  const [txt, cls] = PMCC_BADGE[p.level];
+  $("pmccBadge").className = "pill " + cls;
+  $("pmccBadge").textContent = txt;
+  $("pmccHead").textContent = p.headline;
+  const kv = $("pmccKv");
+  kv.replaceChildren();
+  const row = (k, v, n) => kv.append(el("dt", {}, k), el("dd", {}, el("span", { class: "v" }, v), n ? el("span", { class: "n" }, n) : null));
+  const b = a.best, sc = p.short;
+  row("Buy (long leg)", `${fmtDate(b.expiry)} $${b.strike} call`, `${fmt$(b.mid)} · delta ${b.delta.toFixed(2)}`);
+  if (sc) {
+    row("Sell (short leg)", `${fmtDate(sc.expiry)} $${sc.strike} call`, `${fmt$(sc.mid)} · delta ${sc.delta.toFixed(2)} · ${sc.dte} days`);
+    row("Net cost", fmt$(p.netDebit * 100), "per contract, after the first sale");
+    row("Income per month", fmt$(p.perMonth * 100), `about ${p.monthlyYieldPct.toFixed(1)}% of the LEAPS`);
+    row("If the stock passes " + fmt$(sc.strike), (p.ifCalledAway >= 0 ? "+" : "−") + fmt$(Math.abs(p.ifCalledAway)), "at least, closing both legs");
+  }
+  const steps = $("pmccSteps");
+  steps.replaceChildren();
+  steps.hidden = !sc;
+  if (sc) steps.append(
+    el("li", {}, `Buy the ${fmtDate(b.expiry)} $${b.strike} call for about ${fmt$(b.mid * 100)}.`),
+    el("li", {}, `Sell the ${fmtDate(sc.expiry)} $${sc.strike} call and collect about ${fmt$(sc.mid * 100)}.`),
+    el("li", {}, `If the stock stays below ${fmt$(sc.strike)}, the short call expires worthless and you keep the money. Then sell next month's call.`),
+    el("li", {}, `If the stock climbs toward ${fmt$(sc.strike)}, buy the short call back and sell a higher strike or a later date ("roll"), or close both legs.`));
+  const ul = $("pmccRules");
+  ul.replaceChildren(...p.rules.map((r) => el("li", {},
+    el("div", { class: "row1" }, el("strong", {}, r.title), el("span", { class: "pill " + r.state }, LABEL[r.state])),
+    el("p", {}, r.text))));
+  if (!p.rules.length) ul.append(el("li", {}, el("p", {}, p.reasons[0])));
+  const alt = $("pmccAlt");
+  alt.replaceChildren();
+  if (p.alternatives.length) alt.append("Other short calls: ", ...p.alternatives.map((c, i) =>
+    el("span", { class: "alt-sc" }, `${i ? " · " : ""}${fmtDate(c.expiry)} $${c.strike} (${fmt$(c.mid)}, delta ${c.delta.toFixed(2)})`)));
+}
+
 const NEWS_TAGS = { results: ["Results", "info"], deal: ["Deal", "warn"], risk: ["Watch out", "fail"], positive: ["Positive", "pass"] };
 // What each verdict does and doesn't mean: the checks are a rule screen, not investment advice.
 const MEANING = {
@@ -346,6 +387,8 @@ function render() {
           el("p", { class: "summary" }, c.summary),
           details)));
   }
+
+  renderPmcc(a);
 
   // the contract the user picked, if any
   $("vPick").hidden = !a.picked;
