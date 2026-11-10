@@ -332,7 +332,18 @@ const CHART_RANGES = { "1d": "5m", "5d": "30m" };
 export async function fetchChart(ticker, range, { fetchFn = fetch } = {}) {
   const t = cleanTicker(ticker);
   if (!t || !CHART_RANGES[range]) return { ok: false, error: "Bad ticker or range." };
-  const json = await getJSON(fetchFn, `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol(t))}?range=${range}&interval=${CHART_RANGES[range]}&includePrePost=false`);
+  // Same Yahoo session (cookie and crumb) as the company data; Yahoo refuses bare requests from servers.
+  const attempt = async (fresh) => {
+    const { cookie, crumb } = await getYahooSession(fetchFn, fresh);
+    return getJSON(fetchFn, `https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol(t))}?range=${range}&interval=${CHART_RANGES[range]}&includePrePost=false&crumb=${encodeURIComponent(crumb)}`, { headers: { Cookie: cookie } });
+  };
+  let json;
+  try {
+    json = await attempt(false);
+  } catch (e) {
+    if (e.status !== 401 && e.status !== 403 && e.status !== 429) throw e;
+    json = await attempt(true);
+  }
   const c = normalizeYahooChart(json);
   if (!c || !c.points.length) return { ok: false, error: "No intraday prices." };
   return { ok: true, ticker: t, range, ...c };

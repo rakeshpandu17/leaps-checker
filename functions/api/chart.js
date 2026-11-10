@@ -10,7 +10,7 @@ export async function onRequestGet({ request }) {
     body = { ok: false, error: `Chart failed: ${e.message}` };
   }
   return new Response(JSON.stringify(body), {
-    status: body.ok ? 200 : 502,
+    status: 200, // the page reads body.ok
     headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": `public, max-age=${body.ok ? 60 : 0}` },
   });
 }
