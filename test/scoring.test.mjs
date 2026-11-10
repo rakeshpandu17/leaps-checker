@@ -318,3 +318,19 @@ test("PMCC: picks a 30-45 day short call near 0.25 delta and scores the rules", 
   const none = analyze({ ...d, shortCalls: [] }, {});
   assert.equal(none.pmcc.level, "nogo");
 });
+
+test("top picks: ranks eligible tickers by score, with a market backdrop", async () => {
+  const { topPicks, marketMood } = await import("../public/picks.js");
+  const { slim } = await import("../scripts/nightly-scan.mjs");
+  const { gatherData } = await import("../functions/_lib/data.js");
+  const { mockFetch } = await import("./fixtures.mjs");
+  const d = await gatherData("SOFI", { fetchFn: mockFetch(), now: new Date("2026-10-23T16:52:00Z") });
+  const s = slim(d);
+  const snap = { generatedAt: "2026-10-23T17:00:00Z", stocks: { SOFI: s, SPY: { ...s, calls: [] } } };
+  const r = topPicks(snap, null, "2026-10-23", 5);
+  assert.equal(r.scanned, 2);
+  assert.equal(r.picks.length, 1);
+  assert.equal(r.picks[0].t, "SOFI");
+  assert.ok(r.picks[0].score > 0 && r.picks[0].score <= 100);
+  assert.ok(["up", "down", "mixed"].includes(marketMood(snap).state));
+});

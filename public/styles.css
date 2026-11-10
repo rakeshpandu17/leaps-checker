@@ -71,7 +71,25 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .ideas.collapsed .ideas-head h2 { font-size: 1.1rem; }
 .progress { height: 6px; background: var(--info-bg); border-radius: 999px; overflow: hidden; }
 .progress .bar { height: 100%; width: 0; background: var(--accent); transition: width .2s; }
-.ideas-tbl tbody tr, .pick-tbl tbody tr { cursor: pointer; }
+.ideas-tbl tbody tr, .pick-tbl tbody tr, .top-tbl tbody tr { cursor: pointer; }
+.top-tbl tbody tr:hover, .top-tbl tbody tr:focus-visible { background: var(--accent-soft); outline: none; }
+/* Top picks: the market backdrop strip, then the ranked table. */
+.top-picks { gap: 12px; }
+.top-picks.collapsed .ideas-head h2 { font-size: 1.1rem; }
+.mood { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; padding: 10px 12px; border-radius: 8px; background: var(--bg); font-size: .92rem; }
+.mood strong { font-weight: 600; }
+.mood .idx { font-family: var(--mono); font-size: .85rem; white-space: nowrap; }
+.mood .up { color: var(--pass); } .mood .down { color: var(--fail); }
+.mood .sect { color: var(--muted); }
+.top-tbl { min-width: 860px; }
+.top-tbl th:nth-child(2), .top-tbl td:nth-child(2), .top-tbl th:nth-child(4), .top-tbl td:nth-child(4), .top-tbl th:nth-child(5), .top-tbl td:nth-child(5) { text-align: left; }
+.top-tbl td.tk { font-weight: 600; }
+.top-tbl td.tk small { display: block; font: 400 .78rem var(--body); color: var(--muted); max-width: 190px; overflow: hidden; text-overflow: ellipsis; }
+.top-tbl td.why { white-space: normal; min-width: 240px; }
+.top-tbl td.why .pill { font-size: .62rem; padding: 3px 6px; margin: 1px 4px 1px 0; }
+.score { display: inline-flex; align-items: center; gap: 6px; }
+.score .meter { width: 54px; height: 6px; border-radius: 999px; background: var(--info-bg); overflow: hidden; }
+.score .meter span { display: block; height: 100%; background: var(--accent); }
 .ideas-tbl tbody tr:hover, .ideas-tbl tbody tr:focus-visible,
 .pick-tbl tbody tr:hover, .pick-tbl tbody tr:focus-visible { background: var(--accent-soft); outline: none; }
 .diff.pick { background: var(--accent-soft); display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }

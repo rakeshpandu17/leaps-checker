@@ -1,6 +1,7 @@
 import { analyze, daysBetween } from "./scoring.js";
 import { UNIVERSE, NAMES } from "./universe.js";
 import { fromSnapshot, SNAPSHOT_MAX_AGE_DAYS } from "./snapshot.js";
+import { topPicks } from "./picks.js";
 
 const $ = (id) => document.getElementById(id);
 const PREFS = "leaps-go-prefs-v1";
@@ -988,10 +989,77 @@ function renderIdeas(ideas, pv, when) {
   });
 }
 
+// ---------- today's top LEAPS picks ----------
+// The whole scan ranked for the strategy, whatever the portfolio size. Reloads the scan file every 15
+// minutes while the page is open, so a new scan shows up without a page reload.
+const TOP_LIMIT = 12;
+const MOOD = { up: ["Uptrend", "up"], down: ["Downtrend", "down"], mixed: ["Mixed", ""], unknown: ["Unknown", ""] };
+let topRun = 0;
+async function showTopPicks(force = false) {
+  const id = ++topRun;
+  const snap = await loadSnapshot(force);
+  if (id !== topRun) return;
+  const box = $("topPicks");
+  if (!snap) { box.hidden = true; return; }
+  const ivh = await loadIvHist();
+  if (id !== topRun) return;
+  const { mood, picks, eligible, scanned } = topPicks(snap, ivh, new Date().toISOString().slice(0, 10), TOP_LIMIT);
+  const when = new Date(snap.generatedAt).toLocaleString("en-US", { timeZone: "America/New_York", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  $("topPicksSub").textContent = `${picks.length} highest-scoring of ${eligible} that pass, from ${scanned} stocks and ETFs scanned ${when} ET. Any portfolio size.`;
+
+  const m = $("mood");
+  m.replaceChildren(el("span", {}, el("strong", {}, "Market: "), el("span", { class: MOOD[mood.state][1] }, MOOD[mood.state][0])));
+  for (const x of mood.indexes) {
+    m.append(el("span", { class: "idx", title: `${x.name}: ${x.state === "up" ? "above" : x.state === "down" ? "below" : "around"} its 50- and 200-day averages` },
+      `${x.t} `, el("span", { class: x.ret1m >= 0 ? "up" : "down" }, `${fmtPct(x.ret1m, 1)} 1 mo`)));
+  }
+  if (mood.leaders.length) {
+    m.append(el("span", { class: "sect" }, `Leading (3 mo): ${mood.leaders.map((x) => `${x.name} ${fmtPct(x.ret3m, 0)}`).join(", ")}`));
+  }
+  if (mood.state === "down") m.append(el("span", { class: "down" }, "The market is in a downtrend: LEAPS calls carry more risk now, so size small."));
+
+  const tb = $("topPicksBody");
+  tb.replaceChildren();
+  picks.forEach((p, i) => {
+    const b = p.a.best, name = p.d.fundamentals?.name || NAMES[p.t] || "";
+    ideaInfo.set(p.t, { t: p.t, when, level: p.a.verdict.level, symbol: b.symbol, contract: `${fmtDate(b.expiry)} $${b.strike}`,
+      bid: b.bid, ask: b.ask, spread: b.spreadPct, oi: b.oi });
+    const bar = el("span");
+    bar.style.width = p.score + "%";
+    tb.append(el("tr", { "data-t": p.t, tabindex: "0", title: `Open the full ${p.t} check` },
+      el("td", {}, String(i + 1)),
+      el("td", { class: "tk" }, p.t, name ? el("small", {}, name) : null),
+      el("td", {}, el("span", { class: "score" }, String(p.score), el("span", { class: "meter" }, bar))),
+      el("td", { class: "why" }, ...(p.why.length ? p.why.map(([txt, cls]) => el("span", { class: "pill " + cls }, txt)) : ["Balanced"])),
+      el("td", {}, el("span", { class: "pill " + (p.a.verdict.level === "go" ? "pass" : "warn") }, BADGE[p.a.verdict.level])),
+      el("td", {}, `${fmtDate(b.expiry)} $${b.strike}`),
+      el("td", {}, fmt$(b.mid * 100)),
+      el("td", {}, b.delta.toFixed(2)),
+      el("td", {}, fmtPct(b.breakevenPct))));
+  });
+  box.hidden = false;
+}
+function setTopOpen(open) {
+  $("topPicksPanel").hidden = !open;
+  $("topPicks").classList.toggle("collapsed", !open);
+  $("topPicksToggle").setAttribute("aria-expanded", String(open));
+  $("topPicksToggle").textContent = open ? "Hide list" : "Show list";
+}
+$("topPicksRefresh").addEventListener("click", () => { setTopOpen(true); showTopPicks(true); });
+$("topPicksToggle").addEventListener("click", () => setTopOpen($("topPicksPanel").hidden));
+const openTop = (t) => { setTopOpen(false); run(t, true); };
+$("topPicksBody").addEventListener("click", (e) => { const tr = e.target.closest("tr[data-t]"); if (tr) openTop(tr.dataset.t); });
+$("topPicksBody").addEventListener("keydown", (e) => {
+  const tr = e.target.closest("tr[data-t]");
+  if (tr && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); openTop(tr.dataset.t); }
+});
+setInterval(() => showTopPicks(true), 15 * 60 * 1000);
+
 const prefs = loadPrefs();
 const start = new URL(location.href).searchParams.get("t") || prefs.last || "SOFI";
 run(start);
 screen();
+showTopPicks();
 
 // Column-header tooltips for the alternatives table. The table scrolls sideways, which would clip a
 // tooltip inside it, so one shared box sits on the card and is placed under the hovered button.

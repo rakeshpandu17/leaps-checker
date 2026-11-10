@@ -44,6 +44,31 @@
     </div>
   </form>
 
+  <!-- Today's top LEAPS picks: the whole scan ranked for the strategy, whatever the portfolio size. -->
+  <section class="card top-picks" id="topPicks" aria-labelledby="topPicksH" hidden>
+    <div class="ideas-head">
+      <div>
+        <span class="eyebrow">Today's top LEAPS picks</span>
+        <h2 id="topPicksH">Best LEAPS setups in today's market</h2>
+        <p class="sub" id="topPicksSub"></p>
+      </div>
+      <div class="ideas-actions">
+        <button type="button" id="topPicksRefresh">Refresh</button>
+        <button type="button" id="topPicksToggle" aria-expanded="true" aria-controls="topPicksPanel">Hide list</button>
+      </div>
+    </div>
+    <div class="ideas-panel" id="topPicksPanel">
+      <div class="mood" id="mood"></div>
+      <div class="tbl-wrap">
+        <table class="top-tbl">
+          <thead><tr><th>#</th><th>Ticker</th><th>Score</th><th>Why it ranks here</th><th>Verdict</th><th>Contract</th><th>Cost</th><th>Delta</th><th>Break-even</th></tr></thead>
+          <tbody id="topPicksBody"></tbody>
+        </table>
+      </div>
+      <p class="foot-note">Every stock and ETF in the latest scan is checked whatever your portfolio size. A pick needs a contract that passes the checks (not No-go, with a tight market). The score out of 100 weighs the trend (30), strength against the S&amp;P 500 over three months (10), how cheap the options are (15), analyst upside (15), business quality (10), the contract's time value and spread (10), and the last week's news and how soon earnings are (10). The scan runs five times each weekday, about every two hours from 10 am to 6 pm ET, so prices can be up to two hours old. Click a row for a live check. A screen for ideas, not a recommendation.</p>
+    </div>
+  </section>
+
   <section class="card ideas" id="ideas" hidden>
     <div class="ideas-head">
       <div>

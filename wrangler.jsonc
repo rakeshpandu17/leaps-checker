@@ -5,9 +5,10 @@
   "main": "src/worker.js",
   "compatibility_date": "2025-09-01",
   "assets": { "directory": "./public", "binding": "ASSETS" },
-  // Start the stock scan on time, in UTC: 15:00 (11 am EDT / 10 am EST) and 23:00 (7 pm EDT / 6 pm EST), weekdays.
+  // Start the stock scan on time, in UTC: every two hours from 15:00 to 23:00 on weekdays (10 am to 6 pm EST,
+  // 11 am to 7 pm EDT), so the top picks stay fresh through the trading day.
   // Day names on purpose: Cloudflare counts weekdays from 1 = Sunday, so "1-5" would mean Sunday to Thursday.
-  "triggers": { "crons": ["0 15 * * MON-FRI", "0 23 * * MON-FRI"] },
+  "triggers": { "crons": ["0 15,17,19,21,23 * * MON-FRI"] },
   // Builds of other branches (like release/v1.0) run `wrangler preview`, which needs this block.
   "previews": {}
 }

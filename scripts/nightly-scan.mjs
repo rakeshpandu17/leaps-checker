@@ -33,6 +33,8 @@ export function slim(d) {
       revenueGrowth: r4(f.revenueGrowth), profitMargin: r4(f.profitMargin), freeCashflow: f.freeCashflow,
       recommendationMean: r2(f.recommendationMean), recommendationKey: f.recommendationKey, analystCount: f.analystCount,
     },
+    // The three latest headlines, for the top picks' news check.
+    news: (d.news || []).slice(0, 3).map((n) => ({ title: n.title, link: n.link, publisher: n.publisher, time: n.time, tags: n.tags })),
     closes: d.history.slice(-260).map((h) => r2(h.c)),
     calls: d.calls
       .filter((c) => c.bid > 0 && c.ask > 0 && (!(c.delta > 0) || (c.delta >= 0.6 && c.delta <= 0.97)))

@@ -12,6 +12,7 @@ export function fromSnapshot(ticker, s, todayISO) {
     lastExpiry: s.lastExpiry,
     earnings: s.earnings || { date: null, source: null },
     fundamentals: s.fundamentals,
+    news: s.news || [],
     history: (s.closes || []).map((c) => ({ c })),
     calls: (s.calls || []).map(([expiry, strike, bid, ask, iv, delta, oi, symbol]) => ({ expiry, strike, bid, ask, iv, delta, oi, symbol, last: null })),
     notes: [],
