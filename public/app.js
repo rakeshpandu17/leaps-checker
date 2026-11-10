@@ -356,6 +356,40 @@ function ago(iso) {
   return m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : fmtDate(iso.slice(0, 10));
 }
 
+// Ads for the space at the foot of the verdict card, from data/ads.json:
+// { "ads": [{ "title", "text", "cta", "url", "image"?, "sponsor"?, "label"? }] }. "label" replaces the
+// "Sponsored" tag, for the site's own notices. Each analysis fills the two boxes with the next ads in turn.
+// No file or no ads: the space stays hidden.
+let adsPromise = null, adTurn = 0;
+function loadAds() {
+  if (!adsPromise) {
+    adsPromise = fetch("/data/ads.json", { cache: "no-cache" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => (Array.isArray(j?.ads) ? j.ads.filter((x) => x && x.title && /^(https?:\/\/|\/|#)/.test(x.url || "")) : []))
+      .catch(() => []);
+  }
+  return adsPromise;
+}
+async function renderAd() {
+  const slots = [$("adSlotVerdict"), $("adSlot")];
+  const ads = await loadAds();
+  // Each box shows a different ad; a box with no ad left for it stays hidden.
+  const start = adTurn;
+  adTurn += slots.length;
+  slots.forEach((slot, i) => {
+    if (i >= ads.length) { slot.hidden = true; return; }
+    const ad = ads[(start + i) % ads.length];
+    const external = /^https?:/.test(ad.url);
+    const link = el("a", { class: "ad", href: ad.url, ...(external ? { target: "_blank", rel: "sponsored noopener" } : {}) },
+      ...(ad.image ? [el("img", { src: ad.image, alt: "", loading: "lazy" })] : []),
+      el("span", { class: "ad-title" }, ad.title),
+      ...(ad.text ? [el("span", { class: "ad-text" }, ad.text)] : []),
+      el("span", { class: "ad-cta" }, (ad.cta || "Learn more") + " →"));
+    slot.replaceChildren(el("span", { class: "ad-label" }, ad.label || (ad.sponsor ? `Sponsored · ${ad.sponsor}` : "Sponsored")), link);
+    slot.hidden = false;
+  });
+}
+
 function renderNews(news) {
   const ul = $("newsList");
   ul.replaceChildren();
@@ -509,6 +543,7 @@ function render() {
     "The first day the stock trades without its next dividend. The price usually drops by about the dividend that day. Call holders don't receive dividends.",
     `in ${daysBetween(data.today, f.exDividendDate)} days`);
   renderNews(data.news);
+  renderAd();
   if (f.sector) srow("Sector", f.sector,
     `The part of the economy the company belongs to${f.industry ? `. Its industry is ${f.industry}` : ""}.`);
   if (f.marketCap != null) srow("Market cap", fmtBig(f.marketCap),

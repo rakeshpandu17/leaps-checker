@@ -90,6 +90,16 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .verdict.go { border-left-color: var(--pass); }
 .verdict.wait { border-left-color: var(--warn); }
 .verdict.nogo { border-left-color: var(--fail); }
+/* Ad spaces at the foot of the verdict and stock cards: pushed to the bottom so it fills the empty space on wide screens. */
+.ad-slot { margin-top: auto; border: 1px dashed var(--line); border-radius: 10px; padding: 12px 14px; display: grid; gap: 6px; }
+.ad-slot .ad-label { font: 600 .66rem/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.ad-slot a.ad { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; align-items: center; color: inherit; text-decoration: none; }
+.ad-slot a.ad:hover .ad-cta, .ad-slot a.ad:focus-visible .ad-cta { text-decoration: underline; }
+.ad-slot img { grid-row: span 3; width: 56px; height: 56px; object-fit: cover; border-radius: 8px; }
+.ad-slot .ad-title { font-weight: 600; }
+.ad-slot .ad-text { color: var(--muted); font-size: .92rem; }
+.ad-slot .ad-cta { color: var(--accent); font-weight: 600; font-size: .92rem; }
+.ad-slot a.ad:not(:has(img)) > * { grid-column: 1 / -1; }
 .verdict-head { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
 .badge { font: 700 1.1rem/1 var(--display); letter-spacing: .04em; padding: 10px 14px; border-radius: 8px; text-transform: uppercase; }
 .go .badge { background: var(--pass-bg); color: var(--pass); }
@@ -212,7 +222,16 @@ td { font-family: var(--mono); font-variant-numeric: tabular-nums; }
   #result > :not(.grid2):not(#verdict) { grid-column: 1 / -1; }
   #verdict, #bestCard, #stockCard { align-self: stretch; align-content: start; }
   /* The stock card runs down two rows; the price chart fills the space under the verdict and contract cards. */
-  #stockCard { grid-row: span 2; }
+  #stockCard { grid-row: span 2; display: flex; flex-direction: column; }
+  #verdict { display: flex; flex-direction: column; }
+  /* The stock card's ad box grows to fill the card's empty space, with larger type and a banner-size image. */
+  #stockCard .ad-slot { flex: 1 0 220px; align-content: center; gap: 10px; padding: 22px 20px; }
+  #stockCard .ad-slot a.ad { grid-template-columns: 1fr; gap: 8px; }
+  #stockCard .ad-slot a.ad > * { grid-column: 1; }
+  #stockCard .ad-slot img { grid-row: auto; width: 100%; height: auto; max-height: 160px; }
+  #stockCard .ad-slot .ad-title { font-size: 1.25rem; line-height: 1.3; }
+  #stockCard .ad-slot .ad-text { font-size: 1rem; }
+  #stockCard .ad-slot .ad-cta { justify-self: start; margin-top: 4px; padding: 8px 14px; border-radius: 6px; background: var(--accent); color: var(--on-accent); }
   #result > #chartCard.chart-card { grid-column: 1 / span 2; }
   .checks { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; background: none; border: 0; }
   .checks .check { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; align-content: start; grid-template-columns: 1.8rem 1fr; gap: 4px 8px; padding: 14px 14px; }

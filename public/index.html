@@ -84,6 +84,8 @@
       <p class="v-meaning" id="vMeaning"></p>
       <p class="diff" id="vDiff" hidden></p>
       <p class="diff pick" id="vPick" hidden><span id="vPickText"></span> <button type="button" id="pickReset">Back to the best fit</button></p>
+      <!-- Ad space: filled from data/ads.json; stays hidden when there are no ads. -->
+      <aside class="ad-slot" id="adSlotVerdict" aria-label="Sponsored" hidden></aside>
     </div>
 
     <!-- On a wide screen the verdict, contract and stock cards sit side by side, then the checks, news and other contracts. -->
@@ -101,6 +103,8 @@
           <label for="earn">Earnings date override</label>
           <input type="date" id="earn">
         </div>
+        <!-- Ad space: filled from data/ads.json; stays hidden when there are no ads. -->
+        <aside class="ad-slot" id="adSlot" aria-label="Sponsored" hidden></aside>
       </article>
     </div>
 

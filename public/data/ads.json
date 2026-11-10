@@ -1,0 +1,18 @@
+{
+  "ads": [
+    {
+      "label": "From LEAPS checker",
+      "title": "Today's LEAPS ideas",
+      "text": "The daily scan checks 300+ stocks and ETFs. See which ones pass.",
+      "cta": "Open the ideas list",
+      "url": "#ideas"
+    },
+    {
+      "label": "From LEAPS checker",
+      "title": "Own a LEAPS call already?",
+      "text": "See whether selling short calls against it (a poor man's covered call) fits.",
+      "cta": "Go to the PMCC check",
+      "url": "#pmccCard"
+    }
+  ]
+}
