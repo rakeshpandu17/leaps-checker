@@ -47,12 +47,12 @@ export const yahoo = (earnTs = Date.parse("2026-10-27T12:00:00Z") / 1000) => ({ 
 // A fetch stand-in that routes URLs to fixtures.
 export function mockFetch(over = {}) {
   const routes = {
-    options: () => chain(), quotes: () => quote(), historical: () => history(), yahoo: () => yahoo(), nasdaq: () => ({ data: { announcement: "Earnings announcement* for SOFI: Oct 27, 2026" } }), search: () => searchFixture, secTickers: () => null, secSubs: () => null, chart: () => intraday(), ...over,
+    options: () => chain(), quotes: () => quote(), historical: () => history(), yahoo: () => yahoo(), nasdaq: () => ({ data: { announcement: "Earnings announcement* for SOFI: Oct 27, 2026" } }), search: () => searchFixture, secTickers: () => null, secSubs: () => null, chart: (u = "") => /range=(5y|max)/.test(u) ? longChart(14.77, /range=max/.test(u)) : intraday(), ...over,
   };
   const resp = (body, status = 200, headers = {}) => new Response(typeof body === "string" ? body : JSON.stringify(body), { status, headers });
   return async (url) => {
     url = String(url);
-    const pick = (k) => { const v = routes[k](); return v instanceof Response ? v : v === null ? resp("nope", 404) : resp(v); };
+    const pick = (k) => { const v = routes[k](url); return v instanceof Response ? v : v === null ? resp("nope", 404) : resp(v); };
     if (url.includes("/options/")) return pick("options");
     if (url.includes("/quotes/")) return pick("quotes");
     if (url.includes("/historical/")) return pick("historical");
@@ -85,6 +85,24 @@ export const searchFixture = { news: newsFixture, quotes: [
   { symbol: "BRK-B", shortname: "Berkshire Hathaway Inc. Class B", quoteType: "EQUITY", exchange: "NYQ", exchDisp: "NYSE" },
   { symbol: "^SPX", shortname: "S&P 500", quoteType: "INDEX", exchange: "SNP", exchDisp: "SNP" },
 ] };
+
+// Yahoo chart API shape for 5y (weekly) or max (monthly, ~5.5 years for a young listing).
+export function longChart(S = 14.77, max = false) {
+  const r = rng(23);
+  const step = max ? 30 * 86400 : 7 * 86400, n = max ? 66 : 260;
+  const end = Date.parse(TODAY + "T14:30:00Z") / 1000;
+  const ts = [], close = [];
+  let c = 20;
+  for (let i = 0; i < n; i++) {
+    const phase = i / n;
+    const drift = phase < 0.25 ? -0.02 : phase < 0.45 ? -0.004 : 0.012;
+    c = Math.max(4, c * (1 + drift * (max ? 4.3 : 1) + (r() - 0.5) * (max ? 0.16 : 0.08)));
+    ts.push(end - (n - 1 - i) * step);
+    close.push(+c.toFixed(2));
+  }
+  const k = S / close[close.length - 1];
+  return { chart: { result: [{ meta: { regularMarketPrice: S, chartPreviousClose: close[0] * k }, timestamp: ts, indicators: { quote: [{ close: close.map((x) => +(x * k).toFixed(2)) }] } }] } };
+}
 
 // Yahoo chart API shape: one trading day of 5-minute closes (or 5 days at 30 minutes), drifting around the price.
 export function intraday(S = 14.77, prev = 14.55, days = 1, step = 5) {

@@ -150,6 +150,7 @@ async function run(ticker, fromIdeas = false) {
 const chart = (() => {
   const NS = "http://www.w3.org/2000/svg";
   const DAYS = { "1m": 21, "3m": 63, "6m": 126, "1y": 252, "3y": 760 };
+  const REMOTE = new Set(["1d", "5d", "5y", "max"]); // loaded from /api/chart
   const intra = new Map(); // `${ticker}|${range}` -> promise of { ok, points, prevClose }
   let cur = null, range = "1d", drawn = null;
   const box = $("chartBox"), svg = $("chartSvg"), tip = $("chartTip");
@@ -174,22 +175,24 @@ const chart = (() => {
     if (!hist.length) return;
     for (const b of $("chartRanges").querySelectorAll("button")) b.setAttribute("aria-pressed", String(b.dataset.r === range));
     let pts, prev = null, intraday = false;
-    if (range === "1d" || range === "5d") {
+    if (REMOTE.has(range)) {
       const res = await loadIntra(d.ticker, range);
       if (cur !== d) return;
       if (res && res.ok && res.points.length > 1) {
         pts = res.points.map((p) => ({ t: p.t, c: p.c }));
         prev = range === "1d" ? res.prevClose : null;
-        intraday = true;
+        intraday = range === "1d" || range === "5d";
+        // End the long views at today's price.
+        if (!intraday && d.price) pts.push({ t: d.today, c: d.price });
       } else {
         // No intraday prices (source down): fall back to daily closes.
         $("chartRanges").querySelector(`[data-r="${range}"]`).disabled = true;
-        range = "3m";
+        range = range === "1d" || range === "5d" ? "3m" : "3y";
         return show(d);
       }
     }
     let sma50 = null, sma200 = null;
-    if (!intraday) {
+    if (!REMOTE.has(range)) {
       const n = Math.min(hist.length, DAYS[range]);
       const closes = hist.map((h) => h.c);
       const from = hist.length - n;
@@ -212,15 +215,17 @@ const chart = (() => {
     const c = $("chartChange");
     c.className = ch >= 0 ? "up" : "down";
     c.textContent = `${ch >= 0 ? "+" : "−"}${fmt$(Math.abs(ch))} (${ch >= 0 ? "+" : "−"}${Math.abs(pct).toFixed(2)}%)`;
-    const label = { "1d": "today", "5d": "over 5 days", "1m": "over 1 month", "3m": "over 3 months", "6m": "over 6 months", "1y": "over 1 year", "3y": "over the last 3 years" }[range];
-    $("chartSub").textContent = `${d.ticker} ${label}${range === "3y" && pts.length < 700 ? ` (${(pts.length / 252).toFixed(1)} years of data)` : ""}`;
+    const label = { "1d": "today", "5d": "over 5 days", "1m": "over 1 month", "3m": "over 3 months", "6m": "over 6 months", "1y": "over 1 year", "3y": "over the last 3 years", "5y": "over the last 5 years", "max": "over all available history" }[range];
+    const since = range === "max" ? ` (since ${pts[0].t.slice(0, 4)})` : range === "3y" && pts.length < 700 ? ` (${(pts.length / 252).toFixed(1)} years of data)` : "";
+    $("chartSub").textContent = `${d.ticker} ${label}${since}`;
   }
 
   // Axis dates: "Nov 10" for short ranges, "Nov '26" for a year or more.
   const axisDate = (t) => {
     const dt = new Date(t.slice(0, 10) + "T00:00:00Z");
     const mon = dt.toLocaleDateString("en-US", { month: "short", timeZone: "UTC" });
-    return range === "1y" || range === "3y" ? `${mon} '${t.slice(2, 4)}` : `${mon} ${dt.getUTCDate()}`;
+    if (range === "max") return t.slice(0, 4);
+    return range === "1y" || range === "3y" || range === "5y" ? `${mon} '${t.slice(2, 4)}` : `${mon} ${dt.getUTCDate()}`;
   };
   const when = (t, intraday) => intraday
     ? new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", ...(range === "5d" ? { weekday: "short" } : {}), hour: "numeric", minute: "2-digit" }).format(new Date(t))

@@ -310,7 +310,8 @@ async function fetchSecEarnings(fetchFn, ticker, todayISO) {
 
 // ---------- Intraday chart (Yahoo Finance) ----------
 
-// Cboe's free feed has daily closes only, so the 1-day and 5-day chart views come from Yahoo's chart API.
+// Cboe's free feed has about 3 years of daily closes, so the 1-day, 5-day, 5-year and full-history chart views
+// come from Yahoo's chart API (5-minute, 30-minute, weekly and monthly prices).
 const YAHOO_INDEX = { SPX: "^GSPC", DJX: "^DJI", OEX: "^OEX", XSP: "^XSP" };
 export function yahooSymbol(t) {
   if (INDEXES.has(t)) return YAHOO_INDEX[t] || "^" + t;
@@ -328,7 +329,7 @@ export function normalizeYahooChart(json) {
   return { points, prevClose: num(m.chartPreviousClose) ?? num(m.previousClose), price: num(m.regularMarketPrice) };
 }
 
-const CHART_RANGES = { "1d": "5m", "5d": "30m" };
+const CHART_RANGES = { "1d": "5m", "5d": "30m", "5y": "1wk", "max": "1mo" };
 export async function fetchChart(ticker, range, { fetchFn = fetch } = {}) {
   const t = cleanTicker(ticker);
   if (!t || !CHART_RANGES[range]) return { ok: false, error: "Bad ticker or range." };
