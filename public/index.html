@@ -105,6 +105,25 @@
     </div>
 
 
+    <section class="card chart-card" id="chartCard" aria-labelledby="chartH">
+      <div class="chart-top">
+        <div>
+          <span class="eyebrow" id="chartH">Price chart</span>
+          <div class="chart-price"><span id="chartPrice"></span> <span id="chartChange"></span></div>
+          <p class="sub" id="chartSub"></p>
+        </div>
+        <div class="chart-ranges" id="chartRanges" role="group" aria-label="Chart range">
+          <button type="button" data-r="1d">1D</button><button type="button" data-r="5d">5D</button><button type="button" data-r="1m">1M</button><button type="button" data-r="3m">3M</button><button type="button" data-r="6m">6M</button><button type="button" data-r="1y">1Y</button><button type="button" data-r="3y">3Y</button>
+        </div>
+      </div>
+      <div class="chart-box" id="chartBox"><svg id="chartSvg" role="img" aria-label="Price chart"></svg><div class="chart-tip" id="chartTip" hidden></div></div>
+      <div class="chart-opts" id="chartOpts">
+        <label><input type="checkbox" id="chartSma50"> <span class="sw sma50"></span>50-day average</label>
+        <label><input type="checkbox" id="chartSma200"> <span class="sw sma200"></span>200-day average</label>
+        <span class="chart-note">Prices about 15 minutes delayed. 1D and 5D from Yahoo Finance; longer ranges are daily closes from Cboe.</span>
+      </div>
+    </section>
+
     <section class="checks" id="checks" aria-label="The eight checks"></section>
 
     <section class="card pmcc" id="pmccCard" aria-labelledby="pmccH" hidden>

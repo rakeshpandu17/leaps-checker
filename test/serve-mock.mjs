@@ -5,6 +5,7 @@ import { extname, join } from "node:path";
 import { onRequestGet } from "../functions/api/analyze.js";
 import { onRequestGet as quotesHandler } from "../functions/api/quotes.js";
 import { onRequestGet as searchHandler } from "../functions/api/search.js";
+import { onRequestGet as chartHandler } from "../functions/api/chart.js";
 import { mockFetch, chain, quote, history, yahoo } from "./fixtures.mjs";
 import { scan } from "../scripts/nightly-scan.mjs";
 import { SCAN_UNIVERSE } from "../scripts/scan-universe.mjs";
@@ -33,7 +34,7 @@ globalThis.fetch = mockFetch();
 const types = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css" };
 http.createServer(async (req, res) => {
   const url = new URL(req.url, "http://localhost");
-  const h = { "/api/analyze": onRequestGet, "/api/quotes": quotesHandler, "/api/search": searchHandler }[url.pathname];
+  const h = { "/api/analyze": onRequestGet, "/api/quotes": quotesHandler, "/api/search": searchHandler, "/api/chart": chartHandler }[url.pathname];
   if (h) {
     const r = await h({ request: new Request(url), waitUntil() {} });
     res.writeHead(r.status, { "content-type": "application/json" });

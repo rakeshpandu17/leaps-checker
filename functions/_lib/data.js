@@ -113,7 +113,7 @@ export function normalizeHistory(json) {
     .map((r) => ({ d: r.date, c: num(r.close) }))
     .filter((r) => r.d && r.c && r.c > 0)
     .sort((a, b) => (a.d < b.d ? -1 : 1))
-    .slice(-420);
+    .slice(-760); // about 3 years, for the price chart
 }
 
 // ---------- Yahoo ----------
@@ -306,6 +306,36 @@ async function fetchSecEarnings(fetchFn, ticker, todayISO) {
   const json = await getJSON(fetchFn, `https://data.sec.gov/submissions/CIK${String(cik).padStart(10, "0")}.json`, { headers: { "User-Agent": SEC_UA } });
   const reports = parseSecEarnings(json, todayISO);
   return reports.length ? { reports, nextEstimate: estimateNextEarnings(reports) } : null;
+}
+
+// ---------- Intraday chart (Yahoo Finance) ----------
+
+// Cboe's free feed has daily closes only, so the 1-day and 5-day chart views come from Yahoo's chart API.
+const YAHOO_INDEX = { SPX: "^GSPC", DJX: "^DJI", OEX: "^OEX", XSP: "^XSP" };
+export function yahooSymbol(t) {
+  if (INDEXES.has(t)) return YAHOO_INDEX[t] || "^" + t;
+  return t.replace(".", "-");
+}
+
+export function normalizeYahooChart(json) {
+  const r = json && json.chart && json.chart.result && json.chart.result[0];
+  if (!r) return null;
+  const ts = r.timestamp || [];
+  const closes = (r.indicators && r.indicators.quote && r.indicators.quote[0] && r.indicators.quote[0].close) || [];
+  const points = [];
+  ts.forEach((t, i) => { const c = num(closes[i]); if (c != null && c > 0) points.push({ t: new Date(t * 1000).toISOString(), c: Math.round(c * 100) / 100 }); });
+  const m = r.meta || {};
+  return { points, prevClose: num(m.chartPreviousClose) ?? num(m.previousClose), price: num(m.regularMarketPrice) };
+}
+
+const CHART_RANGES = { "1d": "5m", "5d": "30m" };
+export async function fetchChart(ticker, range, { fetchFn = fetch } = {}) {
+  const t = cleanTicker(ticker);
+  if (!t || !CHART_RANGES[range]) return { ok: false, error: "Bad ticker or range." };
+  const json = await getJSON(fetchFn, `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol(t))}?range=${range}&interval=${CHART_RANGES[range]}&includePrePost=false`);
+  const c = normalizeYahooChart(json);
+  if (!c || !c.points.length) return { ok: false, error: "No intraday prices." };
+  return { ok: true, ticker: t, range, ...c };
 }
 
 // ---------- Ticker search (autocomplete) ----------

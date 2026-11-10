@@ -47,7 +47,7 @@ export const yahoo = (earnTs = Date.parse("2026-10-27T12:00:00Z") / 1000) => ({ 
 // A fetch stand-in that routes URLs to fixtures.
 export function mockFetch(over = {}) {
   const routes = {
-    options: () => chain(), quotes: () => quote(), historical: () => history(), yahoo: () => yahoo(), nasdaq: () => ({ data: { announcement: "Earnings announcement* for SOFI: Oct 27, 2026" } }), search: () => searchFixture, secTickers: () => null, secSubs: () => null, ...over,
+    options: () => chain(), quotes: () => quote(), historical: () => history(), yahoo: () => yahoo(), nasdaq: () => ({ data: { announcement: "Earnings announcement* for SOFI: Oct 27, 2026" } }), search: () => searchFixture, secTickers: () => null, secSubs: () => null, chart: () => intraday(), ...over,
   };
   const resp = (body, status = 200, headers = {}) => new Response(typeof body === "string" ? body : JSON.stringify(body), { status, headers });
   return async (url) => {
@@ -59,6 +59,7 @@ export function mockFetch(over = {}) {
     if (url.includes("fc.yahoo.com")) return resp("", 404, { "set-cookie": "A3=abc; Path=/" });
     if (url.includes("getcrumb")) return resp("crumbXYZ");
     if (url.includes("quoteSummary")) return pick("yahoo");
+    if (url.includes("/v8/finance/chart/")) return pick("chart");
     if (url.includes("/finance/search")) return pick("search");
     if (url.includes("nasdaq.com")) return pick("nasdaq");
     if (url.includes("sec.gov")) return pick(url.includes("company_tickers") ? "secTickers" : "secSubs");
@@ -84,3 +85,20 @@ export const searchFixture = { news: newsFixture, quotes: [
   { symbol: "BRK-B", shortname: "Berkshire Hathaway Inc. Class B", quoteType: "EQUITY", exchange: "NYQ", exchDisp: "NYSE" },
   { symbol: "^SPX", shortname: "S&P 500", quoteType: "INDEX", exchange: "SNP", exchDisp: "SNP" },
 ] };
+
+// Yahoo chart API shape: one trading day of 5-minute closes (or 5 days at 30 minutes), drifting around the price.
+export function intraday(S = 14.77, prev = 14.55, days = 1, step = 5) {
+  const r = rng(11);
+  const ts = [], close = [];
+  let c = prev;
+  for (let d = 0; d < days; d++) {
+    const open = Date.parse(TODAY + "T14:30:00Z") / 1000 - (days - 1 - d) * 86400;
+    for (let m = 0; m <= 390; m += step) {
+      c = c * (1 + (r() - 0.48) * 0.004);
+      ts.push(open + m * 60);
+      close.push(+c.toFixed(2));
+    }
+  }
+  const k = S / close[close.length - 1];
+  return { chart: { result: [{ meta: { regularMarketPrice: S, chartPreviousClose: prev }, timestamp: ts, indicators: { quote: [{ close: close.map((x) => +(x * k).toFixed(2)) }] } }] } };
+}

@@ -2,8 +2,9 @@
 import { onRequestGet as analyze } from "../functions/api/analyze.js";
 import { onRequestGet as quotes } from "../functions/api/quotes.js";
 import { onRequestGet as search } from "../functions/api/search.js";
+import { onRequestGet as chart } from "../functions/api/chart.js";
 
-const ROUTES = { "/api/analyze": analyze, "/api/quotes": quotes, "/api/search": search };
+const ROUTES = { "/api/analyze": analyze, "/api/quotes": quotes, "/api/search": search, "/api/chart": chart };
 
 // The scan runs as a GitHub Actions workflow. GitHub often starts scheduled runs hours late, so a Cloudflare
 // Cron Trigger (see "triggers" in wrangler.jsonc) asks GitHub to start it on time. Needs the GITHUB_TOKEN secret:

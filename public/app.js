@@ -145,6 +145,158 @@ async function run(ticker, fromIdeas = false) {
   }
 }
 
+// ---------- price chart ----------
+// Daily closes come with each check (Cboe, about 3 years). 1D and 5D load from /api/chart (Yahoo, intraday).
+const chart = (() => {
+  const NS = "http://www.w3.org/2000/svg";
+  const DAYS = { "1m": 21, "3m": 63, "6m": 126, "1y": 252, "3y": 760 };
+  const intra = new Map(); // `${ticker}|${range}` -> promise of { ok, points, prevClose }
+  let cur = null, range = "1d", drawn = null;
+  const box = $("chartBox"), svg = $("chartSvg"), tip = $("chartTip");
+  const s = (tag, attrs) => { const n = document.createElementNS(NS, tag); for (const k in attrs) n.setAttribute(k, attrs[k]); return n; };
+
+  function loadIntra(t, r) {
+    const k = t + "|" + r;
+    if (!intra.has(k)) {
+      const p = fetch(`/api/chart?ticker=${encodeURIComponent(t)}&range=${r}`).then((x) => x.json()).catch(() => ({ ok: false }));
+      intra.set(k, p);
+      p.then((b) => { if (!b.ok) setTimeout(() => intra.delete(k), 60000); });
+    }
+    return intra.get(k);
+  }
+  const smaSeries = (closes, n) => closes.map((_, i) => (i + 1 < n ? null : closes.slice(i + 1 - n, i + 1).reduce((a, b) => a + b, 0) / n));
+
+  async function show(d, r) {
+    if (r) range = r;
+    if (d !== cur) { cur = d; }
+    const hist = (d.history || []).filter((h) => h.d);
+    $("chartCard").hidden = !hist.length;
+    if (!hist.length) return;
+    for (const b of $("chartRanges").querySelectorAll("button")) b.setAttribute("aria-pressed", String(b.dataset.r === range));
+    let pts, prev = null, intraday = false;
+    if (range === "1d" || range === "5d") {
+      const res = await loadIntra(d.ticker, range);
+      if (cur !== d) return;
+      if (res && res.ok && res.points.length > 1) {
+        pts = res.points.map((p) => ({ t: p.t, c: p.c }));
+        prev = range === "1d" ? res.prevClose : null;
+        intraday = true;
+      } else {
+        // No intraday prices (source down): fall back to daily closes.
+        $("chartRanges").querySelector(`[data-r="${range}"]`).disabled = true;
+        range = "3m";
+        return show(d);
+      }
+    }
+    let sma50 = null, sma200 = null;
+    if (!intraday) {
+      const n = Math.min(hist.length, DAYS[range]);
+      const closes = hist.map((h) => h.c);
+      const from = hist.length - n;
+      pts = hist.slice(from).map((h) => ({ t: h.d, c: h.c }));
+      // Make the chart end at today's price.
+      if (d.price && pts.length && pts[pts.length - 1].t < d.today) pts.push({ t: d.today, c: d.price });
+      if ($("chartSma50").checked) sma50 = smaSeries(closes, 50).slice(from);
+      if ($("chartSma200").checked) sma200 = smaSeries(closes, 200).slice(from);
+    }
+    drawn = { pts, prev, intraday, sma50, sma200 };
+    header(d, pts, prev);
+    draw();
+  }
+
+  function header(d, pts, prev) {
+    const last = pts[pts.length - 1].c;
+    const base = prev ?? pts[0].c;
+    const ch = last - base, pct = (ch / base) * 100;
+    $("chartPrice").textContent = fmt$(last);
+    const c = $("chartChange");
+    c.className = ch >= 0 ? "up" : "down";
+    c.textContent = `${ch >= 0 ? "+" : "−"}${fmt$(Math.abs(ch))} (${ch >= 0 ? "+" : "−"}${Math.abs(pct).toFixed(2)}%)`;
+    const label = { "1d": "today", "5d": "over 5 days", "1m": "over 1 month", "3m": "over 3 months", "6m": "over 6 months", "1y": "over 1 year", "3y": "over the last 3 years" }[range];
+    $("chartSub").textContent = `${d.ticker} ${label}${range === "3y" && pts.length < 700 ? ` (${(pts.length / 252).toFixed(1)} years of data)` : ""}`;
+  }
+
+  // Axis dates: "Nov 10" for short ranges, "Nov '26" for a year or more.
+  const axisDate = (t) => {
+    const dt = new Date(t.slice(0, 10) + "T00:00:00Z");
+    const mon = dt.toLocaleDateString("en-US", { month: "short", timeZone: "UTC" });
+    return range === "1y" || range === "3y" ? `${mon} '${t.slice(2, 4)}` : `${mon} ${dt.getUTCDate()}`;
+  };
+  const when = (t, intraday) => intraday
+    ? new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", ...(range === "5d" ? { weekday: "short" } : {}), hour: "numeric", minute: "2-digit" }).format(new Date(t))
+    : fmtDate(t.slice(0, 10));
+
+  function draw() {
+    if (!drawn) return;
+    const { pts, prev, intraday, sma50, sma200 } = drawn;
+    const W = box.clientWidth || 600, H = box.clientHeight || 260, L = 6, R = 58, T = 10, B = 24;
+    const vals = pts.map((p) => p.c).concat(prev != null ? [prev] : [], (sma50 || []).filter((x) => x != null), (sma200 || []).filter((x) => x != null));
+    let lo = Math.min(...vals), hi = Math.max(...vals);
+    const pad = (hi - lo) * 0.08 || hi * 0.01;
+    lo -= pad; hi += pad;
+    const x = (i) => L + (i / Math.max(1, pts.length - 1)) * (W - L - R);
+    const y = (v) => T + (1 - (v - lo) / (hi - lo)) * (H - T - B);
+    svg.replaceChildren();
+    svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+    // gridlines and price labels
+    for (let k = 0; k <= 4; k++) {
+      const v = lo + ((hi - lo) * k) / 4;
+      svg.append(s("line", { class: "grid", x1: L, x2: W - R, y1: y(v), y2: y(v) }));
+      const tx = s("text", { class: "axis", x: W - R + 6, y: y(v) + 4 }); tx.textContent = "$" + v.toFixed(v >= 100 ? 0 : 2); svg.append(tx);
+    }
+    // date labels
+    const nx = Math.min(W < 500 ? 3 : 5, pts.length);
+    for (let k = 0; k < nx; k++) {
+      const i = Math.round((k / Math.max(1, nx - 1)) * (pts.length - 1));
+      const tx = s("text", { class: "axis", x: x(i), y: H - 6, "text-anchor": k === 0 ? "start" : k === nx - 1 ? "end" : "middle" });
+      tx.textContent = intraday ? when(pts[i].t, true) : axisDate(pts[i].t);
+      svg.append(tx);
+    }
+    if (prev != null) svg.append(s("line", { class: "prev", x1: L, x2: W - R, y1: y(prev), y2: y(prev) }));
+    const up = pts[pts.length - 1].c >= (prev ?? pts[0].c);
+    const color = up ? "var(--pass)" : "var(--fail)";
+    const line = pts.map((p, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(p.c).toFixed(1)}`).join("");
+    const defs = s("defs", {});
+    const g = s("linearGradient", { id: "chartFill", x1: 0, x2: 0, y1: 0, y2: 1 });
+    g.append(s("stop", { offset: "0%", "stop-color": color, "stop-opacity": ".22" }), s("stop", { offset: "100%", "stop-color": color, "stop-opacity": "0" }));
+    defs.append(g); svg.append(defs);
+    svg.append(s("path", { d: `${line}L${x(pts.length - 1)},${H - B}L${x(0)},${H - B}Z`, fill: "url(#chartFill)" }));
+    for (const [series, cls] of [[sma200, "sma200"], [sma50, "sma50"]]) {
+      if (!series) continue;
+      const d = series.map((v, i) => (v == null ? null : `${x(i).toFixed(1)},${y(v).toFixed(1)}`)).filter(Boolean);
+      if (d.length > 1) svg.append(s("path", { d: "M" + d.join("L"), fill: "none", class: cls, "stroke-width": 1.5 }));
+    }
+    svg.append(s("path", { d: line, fill: "none", stroke: color, "stroke-width": 2, "stroke-linejoin": "round" }));
+    const cross = s("line", { class: "cross", y1: T, y2: H - B, visibility: "hidden" });
+    const dot = s("circle", { r: 4, fill: color, visibility: "hidden" });
+    svg.append(cross, dot);
+    svg.setAttribute("aria-label", `${$("chartSub").textContent}: from ${fmt$(pts[0].c)} to ${fmt$(pts[pts.length - 1].c)}`);
+    const move = (clientX) => {
+      const rect = svg.getBoundingClientRect();
+      const px = ((clientX - rect.left) / rect.width) * W;
+      const i = Math.max(0, Math.min(pts.length - 1, Math.round(((px - L) / (W - L - R)) * (pts.length - 1))));
+      const p = pts[i];
+      for (const n of [cross, dot]) n.setAttribute("visibility", "visible");
+      cross.setAttribute("x1", x(i)); cross.setAttribute("x2", x(i));
+      dot.setAttribute("cx", x(i)); dot.setAttribute("cy", y(p.c));
+      tip.hidden = false;
+      tip.textContent = `${when(p.t, intraday)} · ${fmt$(p.c)}`;
+      tip.style.left = Math.max(60, Math.min(rect.width - 60, (x(i) / W) * rect.width)) + "px";
+    };
+    svg.onpointermove = (e) => move(e.clientX);
+    svg.onpointerdown = (e) => move(e.clientX);
+    svg.onpointerleave = () => { cross.setAttribute("visibility", "hidden"); dot.setAttribute("visibility", "hidden"); tip.hidden = true; };
+  }
+
+  $("chartRanges").addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-r]");
+    if (b && !b.disabled && cur) show(cur, b.dataset.r);
+  });
+  for (const id of ["chartSma50", "chartSma200"]) $(id).addEventListener("change", () => cur && show(cur));
+  if (typeof ResizeObserver !== "undefined") new ResizeObserver(() => draw()).observe(box);
+  return { show: (d) => { for (const b of $("chartRanges").querySelectorAll("button")) b.disabled = false; return show(d, d === cur ? range : "1d"); } };
+})();
+
 // Poor man's covered call: the LEAPS above as the long leg, plus a short call to sell against it.
 const PMCC_BADGE = { go: ["Fits", "pass"], wait: ["Check", "warn"], nogo: ["Doesn't fit", "fail"] };
 function renderPmcc(a) {
@@ -389,6 +541,7 @@ function render() {
   }
 
   renderPmcc(a);
+  chart.show(data);
 
   // the contract the user picked, if any
   $("vPick").hidden = !a.picked;
