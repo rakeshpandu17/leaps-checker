@@ -678,3 +678,147 @@ export function pmcc(data, best, settings = {}) {
     alternatives: ranked.slice(1, 5),
   };
 }
+
+// ---------- a call you already own: hold, sell or roll ----------
+// Follows the exit plan in check 8: take profit at +50% to +100%, cut at -40% when the reason for owning
+// the stock (its trend) has broken, and sell or roll about 9 months (270 days) before expiry, when time
+// decay speeds up. `held` = { strike, expiry, paid (per share), contracts, bid, ask, iv, delta };
+// `best` = the checker's best-fitting LEAPS today (the roll target), or null. A rule screen, not advice.
+export const ROLL_DAYS = 270;
+// `context` (all optional) adds the outside factors: { news: [{ time, tags }], targetMean,
+// sector: { name, etf, state, ret3m }, market: { state } }, where state is "up", "down" or "mixed".
+export function positionAdvice({ S, today, held, history = [], earningsDate = null, best = null, context = {} }) {
+  const { strike, expiry, paid } = held;
+  const contracts = Math.max(1, held.contracts || 1);
+  const dte = daysBetween(today, expiry);
+  const mid = held.bid > 0 && held.ask > 0 ? (held.bid + held.ask) / 2 : held.ask > 0 ? held.ask : held.bid || 0;
+  const T = Math.max(1, dte) / 365;
+  const iv = held.iv > 0.01 ? held.iv : mid > 0 ? impliedVol(mid, S, strike, T) : null;
+  const delta = held.delta > 0 && held.delta <= 1 ? held.delta : iv ? bsDelta(S, strike, T, iv) : null;
+  const intrinsic = Math.max(0, S - strike), extrinsic = Math.max(0, mid - intrinsic);
+  const plPct = paid > 0 ? (mid / paid - 1) * 100 : null;
+  const pl = (mid - paid) * 100 * contracts;
+  const tr = trendInfo(history, S);
+  const trendBroken = !!tr && tr.sma200 != null && S < tr.sma200 && tr.sma50 != null && tr.sma50 < tr.sma200;
+  const trendUp = !!tr && tr.sma200 != null && S > tr.sma200 && tr.sma50 != null && tr.sma50 > tr.sma200;
+  const toEarn = earningsDate ? daysBetween(today, earningsDate) : null;
+  const roll = best && best.expiry > expiry ? { symbol: best.symbol, expiry: best.expiry, strike: best.strike, mid: best.mid, delta: best.delta,
+    netPerShare: best.mid - mid, net: (best.mid - mid) * 100 * contracts } : null;
+  const numbers = { mid, bid: held.bid, ask: held.ask, paid, plPct, pl, dte, delta, iv, intrinsic, extrinsic,
+    breakeven: strike + paid, value: mid * 100 * contracts, contracts };
+  const factors = adviceFactors({ S, today, tr, trendBroken, trendUp, toEarn, context });
+  const negatives = factors.filter((f) => f.state === "fail").length;
+  const positives = factors.filter((f) => f.state === "pass").length;
+  if (dte < 0) return { action: "sell", headline: "This call has expired", summary: "The expiry date has passed.", reasons: [], factors, numbers, roll: null, trend: tr };
+
+  const reasons = [];
+  let action, headline;
+  const n = `${contracts} contract${contracts > 1 ? "s" : ""}`;
+  const rollText = roll ? `Roll to the ${fmtDate(roll.expiry)} $${roll.strike} call at about ${fmt$(roll.mid)} a share: ` +
+    (roll.net >= 0 ? `about ${fmt$(roll.net)} more to pay for ${n}.` : `about ${fmt$(-roll.net)} back to you for ${n}.`) : null;
+  const pctAbs = (x) => Math.abs(x).toFixed(0) + "%";
+
+  if (plPct != null && plPct >= 100) {
+    action = "sell"; headline = "Take your profit";
+    reasons.push(`Up ${pctAbs(plPct)}: the plan's +100% target is reached. Selling now locks in about ${fmt$(pl)}.`);
+    if (trendUp && roll) reasons.push(`The stock is still in an uptrend. To stay in the trade, sell this call and buy a later one. ${rollText}`);
+  } else if (plPct != null && plPct <= -40 && trendBroken) {
+    action = "sell"; headline = "Cut the loss";
+    reasons.push(`Down ${pctAbs(plPct)}, past the plan's -40% stop.`);
+    reasons.push("The stock is below its 200-day average and the 50-day is below the 200-day, so the uptrend you bought for has broken.");
+  } else if (dte <= ROLL_DAYS) {
+    if (plPct != null && plPct < 0 && trendBroken) {
+      action = "sell"; headline = "Sell rather than roll";
+      reasons.push(`${dte} days left, inside the last 9 months when time decay speeds up, and the stock's trend has broken. Rolling would put more money into a losing idea.`);
+    } else if (roll) {
+      action = "roll"; headline = "Roll to a later expiry";
+      reasons.push(`${dte} days left, inside the last 9 months when time decay speeds up. Sell this call and buy a later one.`);
+      reasons.push(rollText);
+    } else {
+      action = "sell"; headline = "Sell before time decay speeds up";
+      reasons.push(`${dte} days left, inside the last 9 months. No later LEAPS that passes the checks is listed to roll into.`);
+    }
+  } else if (plPct != null && plPct <= -40) {
+    action = "hold"; headline = "Hold, but you're at your stop";
+    reasons.push(`Down ${pctAbs(plPct)}, past the -40% stop, but the stock's trend hasn't broken. Recheck your reason for owning it before you decide.`);
+  } else if (plPct != null && plPct >= 50 && delta != null && delta >= 0.9 && roll && roll.strike > strike) {
+    action = "roll"; headline = "Roll up to lock in gains";
+    reasons.push(`Up ${pctAbs(plPct)} and very deep in the money (delta ${delta.toFixed(2)}), so the call now ties up a lot of money.`);
+    reasons.push(`${rollText} That takes money off the table and keeps you in the trade.`);
+  } else if (delta != null && delta < 0.5 && dte < 365) {
+    action = "sell"; headline = "Sell: the call is out of the money";
+    reasons.push(`Delta is ${delta.toFixed(2)}: the stock is near or below the strike, so most of what's left is time value, which shrinks every day.`);
+  } else {
+    action = "hold"; headline = "Hold";
+    reasons.push(`${dte} days left (about ${Math.round(dte / 30.44)} months), more than 9 months, so time decay is still slow.`);
+    if (plPct != null && plPct >= 50) reasons.push(`Up ${pctAbs(plPct)}, past the +50% first target. Consider selling part of the position to lock in some gains.`);
+    else if (plPct != null) reasons.push(`${plPct >= 0 ? "Up" : "Down"} ${pctAbs(plPct)}, between the plan's -40% stop and +50% first target.`);
+  }
+  // The outside factors can change a Hold: a big gain with the backdrop turning against you is worth banking.
+  if (action === "hold" && plPct != null && plPct >= 50 && negatives >= 2) {
+    action = "sell"; headline = "Take profit: the backdrop is turning";
+    reasons.unshift(`Up ${pctAbs(plPct)}, and ${negatives} of the outside factors below are against you. Banking the gain beats waiting for the +100% target.`);
+  } else if (action === "hold" && negatives >= 3) {
+    headline = "Hold with caution";
+    reasons.push(`${negatives} of the outside factors below are against you. Consider selling part of the position, and stick to your stop.`);
+  }
+  if (action === "hold") {
+    reasons.push(`Plan to sell or roll by ${fmtDate(addDays(expiry, -ROLL_DAYS))}, 9 months before expiry.`);
+    if (trendBroken) reasons.push("Watch out: the stock is below its 200-day average and the 50-day is below the 200-day.");
+  }
+  if (held.bid > 0 && held.ask > 0 && (held.ask - held.bid) / mid > 0.05) reasons.push(`The bid-ask spread is wide (${fmt$(held.bid)} / ${fmt$(held.ask)}). If you sell, use a limit order near the middle.`);
+  const summary = adviceSummary(action, { plPct, dte, positives, negatives, factors: factors.length });
+  return { action, headline, summary, reasons, factors, numbers, roll, trend: tr };
+}
+
+// One or two plain sentences on why, for the top of the pop-up.
+function adviceSummary(action, { plPct, dte, positives, negatives, factors }) {
+  const pl = plPct == null ? "" : `${plPct >= 0 ? "up" : "down"} ${Math.abs(plPct).toFixed(0)}%`;
+  const back = factors ? ` Of ${factors} outside factors, ${positives} ${positives === 1 ? "favors" : "favor"} the stock and ${negatives} ${negatives === 1 ? "works" : "work"} against it.` : "";
+  if (action === "roll") return `The call is ${pl} with ${dte} days left. Swapping it for a later call keeps your stake in the stock while avoiding the fast time decay of the last months.${back}`;
+  if (action === "sell") return `The call is ${pl} with ${dte} days left, and the exit plan says to close it now.${back}`;
+  return `The call is ${pl} with ${dte} days left, and nothing in the exit plan says to act yet.${back}`;
+}
+
+// The outside factors: the stock's trend, recent news, its industry, the market, analysts and earnings.
+const SECTOR_LABEL = { up: "in an uptrend", down: "in a downtrend", mixed: "mixed" };
+function adviceFactors({ S, today, tr, trendBroken, trendUp, toEarn, context }) {
+  const out = [];
+  const add = (name, state, text) => out.push({ name, state, text });
+  if (tr && tr.sma200 != null) {
+    add("Stock trend", trendUp ? "pass" : trendBroken ? "fail" : "warn",
+      trendUp ? `Above its 200-day average (${fmt$(tr.sma200)}), with the 50-day above the 200-day.`
+        : trendBroken ? `Below its 200-day average (${fmt$(tr.sma200)}), with the 50-day below the 200-day.`
+        : `Mixed: price ${S > tr.sma200 ? "above" : "below"} the 200-day average (${fmt$(tr.sma200)}), but the averages disagree.`);
+  }
+  const news = (context.news || []).filter((n) => n.time && daysBetween(n.time.slice(0, 10), today) <= 7);
+  if (context.news) {
+    const tags = new Set(news.flatMap((n) => n.tags || []));
+    const risk = news.find((n) => (n.tags || []).includes("risk")), good = news.find((n) => (n.tags || []).includes("positive"));
+    if (risk) add("News", "fail", `Risk in the last week's headlines: "${risk.title}".`);
+    else if (good) add("News", "pass", `Positive headline this week: "${good.title}".`);
+    else if (tags.has("deal")) add("News", "warn", "Deal news this week. These can move the stock sharply either way.");
+    else add("News", "info", news.length ? "No clearly good or bad headlines in the last week." : "No headlines in the last week.");
+  }
+  const sec = context.sector;
+  if (sec && sec.state) {
+    add("Industry", sec.state === "up" ? "pass" : sec.state === "down" ? "fail" : "warn",
+      `${sec.name} (${sec.etf}) is ${SECTOR_LABEL[sec.state]}` + (sec.ret3m != null ? `, ${fmtPct(sec.ret3m, 0)} over 3 months.` : "."));
+  }
+  const mkt = context.market;
+  if (mkt && mkt.state && mkt.state !== "unknown") {
+    add("Market", mkt.state === "up" ? "pass" : mkt.state === "down" ? "fail" : "warn",
+      mkt.state === "up" ? "The S&P 500, Nasdaq 100 and small caps are mostly in uptrends."
+        : mkt.state === "down" ? "The S&P 500, Nasdaq 100 and small caps are mostly in downtrends."
+        : "The big indexes are mixed: some above and some below their long-term averages.");
+  }
+  if (context.targetMean > 0) {
+    const up = (context.targetMean / S - 1) * 100;
+    add("Analysts", up >= 10 ? "pass" : up < 0 ? "fail" : "warn",
+      `Average price target ${fmt$(context.targetMean)}, ${fmtPct(up, 0)} from today.`);
+  }
+  if (toEarn != null && toEarn >= 0 && toEarn <= 30) {
+    add("Earnings", toEarn <= 14 ? "warn" : "info", `Earnings in ${toEarn} day${toEarn === 1 ? "" : "s"}. The price can jump either way that day.`);
+  }
+  return out;
+}

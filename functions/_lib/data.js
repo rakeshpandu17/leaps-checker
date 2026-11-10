@@ -95,6 +95,29 @@ export function normalizeChain(json, todayISO) {
   };
 }
 
+// Every call for one expiry, any time to expiry: for checking a call the user already owns.
+export function callsForExpiry(json, expiry) {
+  const opts = (json && json.data && json.data.options) || [];
+  const out = [];
+  for (const o of opts) {
+    const p = parseOccSymbol(o.option);
+    if (!p || p.type !== "C" || p.expiry !== expiry) continue;
+    out.push({ symbol: o.option, strike: p.strike, bid: num(o.bid) ?? 0, ask: num(o.ask) ?? 0, last: num(o.last_trade_price),
+      iv: num(o.iv), delta: num(o.delta), oi: num(o.open_interest) ?? 0 });
+  }
+  return out.sort((a, b) => a.strike - b.strike);
+}
+
+export async function fetchContracts(ticker, expiry, { fetchFn = fetch } = {}) {
+  const t = cleanTicker(ticker);
+  if (!t || !/^\d{4}-\d{2}-\d{2}$/.test(String(expiry || ""))) return { ok: false, error: "Bad ticker or expiry." };
+  const json = await getJSON(fetchFn, `${CBOE}/options/${cboeSymbol(t)}.json`);
+  const d = (json && json.data) || {};
+  const calls = callsForExpiry(json, expiry);
+  if (!calls.length) return { ok: false, error: `No ${t} calls expiring ${expiry} are listed.` };
+  return { ok: true, ticker: t, expiry, price: num(d.current_price) ?? num(d.close), asOf: json.timestamp || null, calls };
+}
+
 export function normalizeQuote(json) {
   const d = (json && json.data) || {};
   return {
@@ -529,6 +552,8 @@ export async function gatherData(ticker, { fetchFn = fetch, now = new Date() } =
     changePct: quote.changePct ?? null,
     iv30: quote.iv30 ?? chain.underlying.iv30 ?? null,
     lastExpiry: chain.expiriesAll[chain.expiriesAll.length - 1] || null,
+    // Every call expiry still open, for checking a call the user already owns.
+    callExpiries: chain.expiriesAll.filter((e) => e >= todayISO),
     calls,
     shortCalls,
     history,

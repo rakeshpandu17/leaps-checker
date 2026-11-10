@@ -101,6 +101,24 @@
 
   <section id="status" class="status" aria-live="polite"></section>
 
+  <dialog class="own-dialog" id="ownDialog" aria-labelledby="ownHead">
+    <div class="own-dialog-top">
+      <span class="badge" id="ownBadge"></span>
+      <div>
+        <h2 id="ownHead"></h2>
+        <p class="sub" id="ownSub"></p>
+      </div>
+      <button type="button" class="own-close" id="ownClose" aria-label="Close">×</button>
+    </div>
+    <p class="own-summary" id="ownSummary"></p>
+    <dl class="kv own-kv" id="ownKv"></dl>
+    <h3>Why</h3>
+    <ul class="reasons" id="ownReasons"></ul>
+    <h3>Outside factors</h3>
+    <ul class="own-factors" id="ownFactors"></ul>
+    <p class="foot-note">Based on the exit plan: take profit at +50% to +100%, cut at -40% if the stock's trend has broken, and sell or roll about 9 months before expiry. Quotes are about 15 minutes delayed. For education only, not financial advice: check the live quote with your broker before you trade.</p>
+  </dialog>
+
   <section id="result" hidden>
     <div class="verdict" id="verdict">
       <div class="verdict-head">
@@ -114,8 +132,22 @@
       <p class="v-meaning" id="vMeaning"></p>
       <p class="diff" id="vDiff" hidden></p>
       <p class="diff pick" id="vPick" hidden><span id="vPickText"></span> <button type="button" id="pickReset">Back to the best fit</button></p>
-      <!-- Ad space: filled from data/ads.json; stays hidden when there are no ads. -->
-      <aside class="ad-slot" id="adSlotVerdict" aria-label="Sponsored" hidden></aside>
+      <!-- Check a call you already own on this ticker: hold, sell or roll. The verdict opens in a pop-up. -->
+      <form class="own" id="ownForm" autocomplete="off">
+        <span class="eyebrow">Already own a LEAPS call?</span>
+        <strong class="own-title">Check it: hold, sell or roll</strong>
+        <div class="own-fields">
+          <div class="field own-tk"><label for="ownTicker">Ticker (any stock or ETF)</label><input id="ownTicker" maxlength="40" placeholder="SOFI" autocapitalize="characters" spellcheck="false"></div>
+          <div class="field"><label for="ownExpiry">Expiry</label><select id="ownExpiry" required></select></div>
+          <div class="field"><label for="ownStrike">Strike</label><select id="ownStrike" required disabled><option value="">–</option></select></div>
+          <div class="field"><label for="ownPaid">Paid per share ($)</label><input id="ownPaid" inputmode="decimal" placeholder="6.50" required></div>
+          <div class="field"><label for="ownQty">Contracts</label><input id="ownQty" inputmode="numeric" value="1"></div>
+        </div>
+        <div class="own-actions">
+          <button type="submit" class="primary" id="ownGo">Check my call</button>
+          <span class="sub" id="ownStatus" aria-live="polite"></span>
+        </div>
+      </form>
     </div>
 
     <!-- On a wide screen the verdict, contract and stock cards sit side by side, then the checks, news and other contracts. -->

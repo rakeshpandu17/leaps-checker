@@ -334,3 +334,23 @@ test("top picks: ranks eligible tickers by score, with a market backdrop", async
   assert.ok(r.picks[0].score > 0 && r.picks[0].score <= 100);
   assert.ok(["up", "down", "mixed"].includes(marketMood(snap).state));
 });
+
+test("position advice: hold, sell and roll follow the exit plan", async () => {
+  const { positionAdvice } = await import("../public/scoring.js");
+  const up = Array.from({ length: 300 }, (_, i) => ({ c: 10 * 1.002 ** i }));
+  const down = Array.from({ length: 300 }, (_, i) => ({ c: 20 * 0.998 ** i }));
+  const S = up[299].c;
+  const best = { symbol: "B", expiry: "2028-12-15", strike: 12, mid: 7, delta: 0.8 };
+  const held = (o) => ({ strike: 12, expiry: "2028-01-21", paid: 6, contracts: 1, bid: 6.9, ask: 7.1, iv: 0.5, delta: 0.8, ...o });
+  const run = (h, history = up, extra = {}) => positionAdvice({ S: history[history.length - 1].c, today: "2026-11-10", held: h, history, best, ...extra });
+  assert.equal(run(held()).action, "hold");
+  assert.equal(run(held({ paid: 3 })).action, "sell"); // +133%
+  assert.equal(run(held({ expiry: "2027-06-17" })).action, "roll"); // 219 days left
+  assert.equal(run(held({ paid: 13 }), down).action, "sell"); // -46% with a broken trend
+  assert.equal(run(held({ paid: 13 })).action, "hold"); // -46% but the trend holds
+  const ctx = { sector: { name: "Tech", etf: "XLK", state: "down", ret3m: -9 }, market: { state: "down" },
+    news: [{ time: "2026-11-09T12:00:00Z", title: "Probe", tags: ["risk"] }], targetMean: S * 0.9 };
+  const r = run(held({ paid: 4.5 }), up, { context: ctx }); // +56% with 4 factors against
+  assert.equal(r.action, "sell");
+  assert.ok(r.factors.length >= 4 && r.summary.length > 20);
+});

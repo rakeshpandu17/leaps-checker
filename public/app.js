@@ -1,7 +1,7 @@
-import { analyze, daysBetween } from "./scoring.js";
+import { analyze, daysBetween, positionAdvice } from "./scoring.js";
 import { UNIVERSE, NAMES } from "./universe.js";
 import { fromSnapshot, SNAPSHOT_MAX_AGE_DAYS } from "./snapshot.js";
-import { topPicks } from "./picks.js";
+import { topPicks, marketMood } from "./picks.js";
 
 const $ = (id) => document.getElementById(id);
 const PREFS = "leaps-go-prefs-v1";
@@ -359,7 +359,7 @@ function ago(iso) {
 
 // Ads for the space at the foot of the verdict card, from data/ads.json:
 // { "ads": [{ "title", "text", "cta", "url", "image"?, "sponsor"?, "label"? }] }. "label" replaces the
-// "Sponsored" tag, for the site's own notices. Each analysis fills the two boxes with the next ads in turn.
+// "Sponsored" tag, for the site's own notices. Each analysis shows the next ad in turn.
 // No file or no ads: the space stays hidden.
 let adsPromise = null, adTurn = 0;
 function loadAds() {
@@ -372,7 +372,7 @@ function loadAds() {
   return adsPromise;
 }
 async function renderAd() {
-  const slots = [$("adSlotVerdict"), $("adSlot")];
+  const slots = [$("adSlot")];
   const ads = await loadAds();
   // Each box shows a different ad; a box with no ad left for it stays hidden.
   const start = adTurn;
@@ -544,6 +544,7 @@ function render() {
     "The first day the stock trades without its next dividend. The price usually drops by about the dividend that day. Call holders don't receive dividends.",
     `in ${daysBetween(data.today, f.exDividendDate)} days`);
   renderNews(data.news);
+  setupOwn();
   renderAd();
   if (f.sector) srow("Sector", f.sector,
     `The part of the economy the company belongs to${f.industry ? `. Its industry is ${f.industry}` : ""}.`);
@@ -988,6 +989,160 @@ function renderIdeas(ideas, pv, when) {
       el("td", { class: p.annualized >= 0 ? "up" : "down" }, fmtPct(p.annualized, 0) + (p.basis === "analyst target" ? "" : " †"))));
   });
 }
+
+// ---------- a call you already own: hold, sell or roll ----------
+// The box at the foot of the verdict card. It follows the analyzed ticker until you type another one
+// (that ticker's data then loads on its own). Expiries come with the analysis; picking one loads that
+// expiry's strikes and quotes (/api/contract), since a call you own may be under the 8 months the
+// checker otherwise looks at. Inputs are remembered per ticker in this browser.
+const SECTOR_ETF = { "Technology": ["XLK", "Tech"], "Financial Services": ["XLF", "Financials"], "Energy": ["XLE", "Energy"],
+  "Healthcare": ["XLV", "Health care"], "Industrials": ["XLI", "Industrials"], "Consumer Cyclical": ["XLY", "Consumer discretionary"],
+  "Consumer Defensive": ["XLP", "Consumer staples"], "Utilities": ["XLU", "Utilities"], "Basic Materials": ["XLB", "Materials"],
+  "Real Estate": ["XLRE", "Real estate"], "Communication Services": ["XLC", "Communications"] };
+const ACTION = { hold: "Hold", sell: "Sell", roll: "Roll" };
+let ownData = null, ownTicker = null, ownCalls = [], ownSeq = 0, ownFollow = true, ownLoad = 0;
+const ownSaved = (t) => { try { return (JSON.parse(localStorage.getItem(PREFS) || "{}").own || {})[t] || null; } catch (e) { return null; } };
+function ownSave(t, v) {
+  try {
+    const old = JSON.parse(localStorage.getItem(PREFS) || "{}");
+    localStorage.setItem(PREFS, JSON.stringify({ ...old, own: { ...(old.own || {}), [t]: v } }));
+  } catch (e) {}
+}
+// Called after each analysis: the box follows the analyzed ticker unless you typed another one.
+function setupOwn() {
+  if (!data) return;
+  if (ownFollow && (!ownData || ownData.ticker !== data.ticker || ownData !== data)) useOwnData(data);
+}
+function useOwnData(d) {
+  const same = ownData && ownData.ticker === d.ticker;
+  ownData = d;
+  $("ownTicker").value = d.ticker;
+  if (same && ownCalls.length) return; // a re-render of the same ticker keeps what you picked
+  ownTicker = d.ticker;
+  ownCalls = [];
+  $("ownStatus").textContent = "";
+  const sel = $("ownExpiry");
+  const exps = (d.callExpiries || []).filter((e) => e >= d.today);
+  sel.replaceChildren(el("option", { value: "" }, exps.length ? "Pick one" : "None listed"),
+    ...exps.map((e) => el("option", { value: e }, `${fmtDate(e)} (${daysBetween(d.today, e)} d)`)));
+  const st = $("ownStrike");
+  st.replaceChildren(el("option", { value: "" }, "–"));
+  st.disabled = true;
+  const saved = ownSaved(d.ticker);
+  $("ownPaid").value = saved?.paid || "";
+  $("ownQty").value = saved?.qty || "1";
+  if (saved?.expiry && exps.includes(saved.expiry)) { sel.value = saved.expiry; loadOwnStrikes(saved.strike); }
+}
+// Typing a ticker: "SOFI", "sofi" or "SOFI (SoFi Technologies)" all work.
+async function loadOwnTicker() {
+  const t = String($("ownTicker").value || "").trim().split(/[\s(]/)[0].toUpperCase().replace(/[^A-Z0-9.\-]/g, "");
+  if (!t) { if (data) { ownFollow = true; useOwnData(data); } return; }
+  if (data && t === data.ticker) { ownFollow = true; useOwnData(data); return; }
+  if (ownData && ownData.ticker === t) return;
+  ownFollow = false;
+  const id = ++ownLoad;
+  $("ownExpiry").replaceChildren(el("option", { value: "" }, "Loading…"));
+  $("ownStrike").replaceChildren(el("option", { value: "" }, "–"));
+  $("ownStrike").disabled = true;
+  ownCalls = [];
+  $("ownStatus").textContent = `Loading ${t}…`;
+  const d = await fetchAnalysis(t);
+  if (id !== ownLoad) return;
+  if (!d.ok) {
+    $("ownExpiry").replaceChildren(el("option", { value: "" }, "–"));
+    $("ownStatus").textContent = d.error || `Couldn't load ${t}.`;
+    ownData = null;
+    return;
+  }
+  useOwnData(d);
+}
+$("ownTicker").addEventListener("change", loadOwnTicker);
+$("ownTicker").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); loadOwnTicker(); } });
+$("ownTicker").addEventListener("focus", (e) => e.target.select());
+async function loadOwnStrikes(want) {
+  const exp = $("ownExpiry").value, t = ownTicker, id = ++ownSeq;
+  const st = $("ownStrike");
+  st.disabled = true;
+  ownCalls = [];
+  if (!exp) { st.replaceChildren(el("option", { value: "" }, "–")); return; }
+  st.replaceChildren(el("option", { value: "" }, "Loading…"));
+  let r;
+  try { r = await fetch(`/api/contract?ticker=${encodeURIComponent(t)}&expiry=${exp}`).then((x) => x.json()); }
+  catch (e) { r = { ok: false, error: "Couldn't load the strikes. Try again." }; }
+  if (id !== ownSeq) return;
+  if (!r.ok) { st.replaceChildren(el("option", { value: "" }, "Not available")); $("ownStatus").textContent = r.error; return; }
+  ownCalls = r.calls;
+  const S = ownData.price;
+  st.replaceChildren(el("option", { value: "" }, "Pick one"),
+    ...r.calls.map((c) => el("option", { value: String(c.strike) }, `$${c.strike}${c.strike < S ? " · ITM" : ""}`)));
+  st.disabled = false;
+  if (want != null && r.calls.some((c) => String(c.strike) === String(want))) st.value = String(want);
+  $("ownStatus").textContent = "";
+}
+$("ownExpiry").addEventListener("change", () => loadOwnStrikes());
+
+async function ownContext() {
+  const d = ownData;
+  const ctx = { news: d.news || [], targetMean: d.fundamentals?.targetMean || null };
+  const snap = await loadSnapshot(false);
+  if (snap) {
+    const mood = marketMood(snap);
+    ctx.market = { state: mood.state };
+    const m = SECTOR_ETF[d.fundamentals?.sector];
+    const s = m && snap.stocks[m[0]];
+    if (s && s.closes?.length >= 200) {
+      const c = s.closes, n = c.length, avg = (k) => c.slice(-k).reduce((a, b) => a + b, 0) / k;
+      const s50 = avg(50), s200 = avg(200), last = c[n - 1];
+      ctx.sector = { name: m[1], etf: m[0], ret3m: n > 63 ? (last / c[n - 64] - 1) * 100 : null,
+        state: last > s200 && s50 > s200 ? "up" : last < s200 && s50 < s200 ? "down" : "mixed" };
+    }
+  }
+  return ctx;
+}
+
+$("ownForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const strike = parseFloat($("ownStrike").value), paid = parseFloat(String($("ownPaid").value).replace(/[$,]/g, ""));
+  const qty = Math.max(1, parseInt($("ownQty").value, 10) || 1), expiry = $("ownExpiry").value;
+  const c = ownCalls.find((x) => x.strike === strike);
+  if (!ownData) { $("ownStatus").textContent = "Enter the ticker of your call."; return; }
+  if (!expiry || !c) { $("ownStatus").textContent = "Pick the expiry and strike of your call."; return; }
+  if (!(paid > 0)) { $("ownStatus").textContent = "Enter what you paid per share, like 6.50 (the contract price ÷ 100)."; return; }
+  const od = ownData;
+  ownSave(od.ticker, { expiry, strike, paid, qty });
+  $("ownStatus").textContent = "";
+  const a = analyze(od, settings());
+  const adv = positionAdvice({ S: od.price, today: od.today, held: { strike, expiry, paid, contracts: qty, bid: c.bid, ask: c.ask, iv: c.iv, delta: c.delta },
+    history: od.history || [], earningsDate: od.earnings?.date || null, best: a.best, context: await ownContext() });
+  showOwn(adv, { strike, expiry, qty });
+});
+
+function showOwn(adv, { strike, expiry, qty }) {
+  const d = $("ownDialog"), n = adv.numbers, od = ownData;
+  d.className = "own-dialog " + adv.action;
+  $("ownBadge").className = "badge " + adv.action;
+  $("ownBadge").textContent = ACTION[adv.action];
+  $("ownHead").textContent = adv.headline;
+  $("ownSub").textContent = `Your ${qty} × ${od.ticker} ${fmtDate(expiry)} $${strike} call · ${od.ticker} ${fmt$(od.price)} · as of ${fmtAsOf(od.asOf)}, delayed`;
+  $("ownSummary").textContent = adv.summary;
+  const kv = $("ownKv");
+  kv.replaceChildren();
+  const row = (k, v, note, cls) => kv.append(el("dt", {}, k), el("dd", {}, el("span", { class: "v" + (cls ? " " + cls : "") }, v), note ? el("span", { class: "n" }, note) : null));
+  row("Worth now", fmt$(n.mid), `${fmt$(n.bid)} – ${fmt$(n.ask)} · ${fmt$(n.value)} in all`);
+  row("You paid", fmt$(n.paid), `${fmt$(n.paid * 100 * n.contracts)} in all`);
+  row("Gain or loss", `${n.pl >= 0 ? "+" : "−"}${fmt$(Math.abs(n.pl))}`, n.plPct != null ? fmtPct(n.plPct, 0) : null, n.pl >= 0 ? "up" : "down");
+  row("Days to expiry", String(n.dte), `${(n.dte / 30.44).toFixed(1)} months`);
+  if (n.delta != null) row("Delta", n.delta.toFixed(2));
+  row("Time value left", fmt$(n.extrinsic), n.mid > 0 ? `${Math.round(n.extrinsic / n.mid * 100)}% of the price` : null);
+  if (adv.roll) row("Roll target", `${fmtDate(adv.roll.expiry)} $${adv.roll.strike}`, `${fmt$(adv.roll.mid)} · ${adv.roll.net >= 0 ? "pay" : "get back"} ${fmt$(Math.abs(adv.roll.net))}`);
+  $("ownReasons").replaceChildren(...adv.reasons.map((r) => el("li", {}, r)));
+  const PILL = { pass: "Good", warn: "Mixed", fail: "Against", info: "Note" };
+  $("ownFactors").replaceChildren(...adv.factors.map((f) =>
+    el("li", {}, el("span", { class: "pill " + f.state }, `${f.name}: ${PILL[f.state]}`), el("span", {}, f.text))));
+  if (typeof d.showModal === "function") d.showModal(); else d.setAttribute("open", "");
+}
+$("ownClose").addEventListener("click", () => $("ownDialog").close());
+$("ownDialog").addEventListener("click", (e) => { if (e.target === $("ownDialog")) $("ownDialog").close(); });
 
 // ---------- today's top LEAPS picks ----------
 // The whole scan ranked for the strategy, whatever the portfolio size. Reloads the scan file every 15

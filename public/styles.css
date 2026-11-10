@@ -111,6 +111,36 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .verdict.go { border-left-color: var(--pass); }
 .verdict.wait { border-left-color: var(--warn); }
 .verdict.nogo { border-left-color: var(--fail); }
+/* "Check a call you own" box at the foot of the verdict card, and its pop-up. */
+.own { margin-top: auto; border: 1px solid var(--line); border-radius: 10px; padding: 14px; display: grid; gap: 10px; background: var(--bg); }
+.own-title { font: 600 1.05rem var(--display, inherit); }
+.own-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.own select { font: 400 1rem var(--mono); width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); }
+.own .field input { background: var(--surface); }
+.own-fields .own-tk { grid-column: 1 / -1; }
+.own-tk input { text-transform: uppercase; }
+.own-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.own-dialog { width: min(640px, calc(100vw - 32px)); max-height: calc(100vh - 32px); border: 1px solid var(--line); border-radius: 12px; padding: 20px; background: var(--surface); color: var(--ink); }
+.own-dialog::backdrop { background: rgb(10 14 20 / .55); }
+.own-dialog[open] { display: grid; gap: 12px; }
+.own-dialog h2 { margin: 0; }
+.own-dialog h3 { margin: 4px 0 0; font: 600 .72rem/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.own-dialog-top { display: flex; gap: 14px; align-items: center; }
+.own-dialog-top > div { flex: 1; min-width: 0; }
+.own-close { font-size: 1.4rem; line-height: 1; padding: 4px 10px; align-self: flex-start; }
+.own-summary { margin: 0; font-size: 1.02rem; }
+.own-dialog.hold { border-top: 6px solid var(--pass); }
+.own-dialog.roll { border-top: 6px solid var(--warn); }
+.own-dialog.sell { border-top: 6px solid var(--fail); }
+.badge.hold { color: var(--pass); background: var(--pass-bg); }
+.badge.roll { color: var(--warn); background: var(--warn-bg); }
+.badge.sell { color: var(--fail); background: var(--fail-bg); }
+.own-kv .v.up { color: var(--pass); } .own-kv .v.down { color: var(--fail); }
+.own-factors { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.own-factors li { display: grid; grid-template-columns: 11.5rem 1fr; gap: 10px; align-items: start; }
+.own-factors .pill { justify-self: start; }
+@media (max-width: 560px) { .own-factors li { grid-template-columns: 1fr; gap: 4px; } }
+
 /* Ad spaces at the foot of the verdict and stock cards: pushed to the bottom so it fills the empty space on wide screens. */
 .ad-slot { margin-top: auto; border: 1px dashed var(--line); border-radius: 10px; padding: 12px 14px; display: grid; gap: 6px; }
 .ad-slot .ad-label { font: 600 .66rem/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
