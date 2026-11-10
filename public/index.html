@@ -65,7 +65,12 @@
           <tbody id="topPicksBody"></tbody>
         </table>
       </div>
-      <p class="foot-note">Every stock and ETF in the latest scan is checked whatever your portfolio size. A pick needs a contract that passes the checks (not No-go, with a tight market). The score out of 100 weighs the trend (30), strength against the S&amp;P 500 over three months (10), how cheap the options are (15), analyst upside (15), business quality (10), the contract's time value and spread (10), and the last week's news and how soon earnings are (10). The scan runs five times each weekday, about every two hours from 10 am to 6 pm ET, so prices can be up to two hours old. Click a row for a live check. A screen for ideas, not a recommendation.</p>
+      <nav class="pager" id="topPager" aria-label="Top picks pages" hidden>
+        <button type="button" id="topPrev">← Previous</button>
+        <span class="sub" id="topPageInfo" aria-live="polite"></span>
+        <button type="button" id="topNext">Next →</button>
+      </nav>
+      <p class="foot-note">Every stock and ETF in the latest scan is checked whatever your portfolio size, and every one that passes is listed, 10 to a page. A pick needs a contract that passes the checks (not No-go, with a tight market). The score out of 100 weighs the trend (30), strength against the S&amp;P 500 over three months (10), how cheap the options are (15), analyst upside (15), business quality (10), the contract's time value and spread (10), and the last week's news and how soon earnings are (10). The scan runs five times each weekday, about every two hours from 10 am to 6 pm ET, so prices can be up to two hours old. Click a row for a live check. A screen for ideas, not a recommendation.</p>
     </div>
   </section>
 

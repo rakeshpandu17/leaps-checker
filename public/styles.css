@@ -82,6 +82,9 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .mood .up { color: var(--pass); } .mood .down { color: var(--fail); }
 .mood .sect { color: var(--muted); }
 .top-tbl { min-width: 860px; }
+.pager { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.pager button:disabled { opacity: .45; cursor: default; }
+.pager .sub { text-align: center; flex: 1 1 auto; }
 .top-tbl th:nth-child(2), .top-tbl td:nth-child(2), .top-tbl th:nth-child(4), .top-tbl td:nth-child(4), .top-tbl th:nth-child(5), .top-tbl td:nth-child(5) { text-align: left; }
 .top-tbl td.tk { font-weight: 600; }
 .top-tbl td.tk small { display: block; font: 400 .78rem var(--body); color: var(--muted); max-width: 190px; overflow: hidden; text-overflow: ellipsis; }

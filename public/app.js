@@ -992,7 +992,8 @@ function renderIdeas(ideas, pv, when) {
 // ---------- today's top LEAPS picks ----------
 // The whole scan ranked for the strategy, whatever the portfolio size. Reloads the scan file every 15
 // minutes while the page is open, so a new scan shows up without a page reload.
-const TOP_LIMIT = 12;
+const TOP_PAGE = 10; // picks per page
+let topList = [], topPage = 0, topWhen = "";
 const MOOD = { up: ["Uptrend", "up"], down: ["Downtrend", "down"], mixed: ["Mixed", ""], unknown: ["Unknown", ""] };
 let topRun = 0;
 async function showTopPicks(force = false) {
@@ -1003,9 +1004,9 @@ async function showTopPicks(force = false) {
   if (!snap) { box.hidden = true; return; }
   const ivh = await loadIvHist();
   if (id !== topRun) return;
-  const { mood, picks, eligible, scanned } = topPicks(snap, ivh, new Date().toISOString().slice(0, 10), TOP_LIMIT);
+  const { mood, picks, eligible, scanned } = topPicks(snap, ivh, new Date().toISOString().slice(0, 10), Infinity);
   const when = new Date(snap.generatedAt).toLocaleString("en-US", { timeZone: "America/New_York", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
-  $("topPicksSub").textContent = `${picks.length} highest-scoring of ${eligible} that pass, from ${scanned} stocks and ETFs scanned ${when} ET. Any portfolio size.`;
+  $("topPicksSub").textContent = `${eligible} pass, from ${scanned} stocks and ETFs scanned ${when} ET, ranked best first. Any portfolio size.`;
 
   const m = $("mood");
   m.replaceChildren(el("span", {}, el("strong", {}, "Market: "), el("span", { class: MOOD[mood.state][1] }, MOOD[mood.state][0])));
@@ -1018,9 +1019,19 @@ async function showTopPicks(force = false) {
   }
   if (mood.state === "down") m.append(el("span", { class: "down" }, "The market is in a downtrend: LEAPS calls carry more risk now, so size small."));
 
+  // A refresh keeps the page you're on when it still exists.
+  topList = picks;
+  topWhen = when;
+  topPage = Math.min(topPage, Math.max(0, Math.ceil(picks.length / TOP_PAGE) - 1));
+  renderTopPage();
+  box.hidden = false;
+}
+function renderTopPage() {
   const tb = $("topPicksBody");
   tb.replaceChildren();
-  picks.forEach((p, i) => {
+  const from = topPage * TOP_PAGE, when = topWhen;
+  topList.slice(from, from + TOP_PAGE).forEach((p, j) => {
+    const i = from + j;
     const b = p.a.best, name = p.d.fundamentals?.name || NAMES[p.t] || "";
     ideaInfo.set(p.t, { t: p.t, when, level: p.a.verdict.level, symbol: b.symbol, contract: `${fmtDate(b.expiry)} $${b.strike}`,
       bid: b.bid, ask: b.ask, spread: b.spreadPct, oi: b.oi });
@@ -1037,8 +1048,22 @@ async function showTopPicks(force = false) {
       el("td", {}, b.delta.toFixed(2)),
       el("td", {}, fmtPct(b.breakevenPct))));
   });
-  box.hidden = false;
+  const pages = Math.max(1, Math.ceil(topList.length / TOP_PAGE));
+  $("topPager").hidden = topList.length <= TOP_PAGE;
+  $("topPrev").disabled = topPage <= 0;
+  $("topNext").disabled = topPage >= pages - 1;
+  $("topPageInfo").textContent = topList.length
+    ? `Page ${topPage + 1} of ${pages} · ` + (Math.min(from + TOP_PAGE, topList.length) > from + 1
+      ? `picks ${from + 1} to ${Math.min(from + TOP_PAGE, topList.length)} of ${topList.length}` : `pick ${from + 1} of ${topList.length}`)
+    : "";
 }
+function goTopPage(n) {
+  topPage = n;
+  renderTopPage();
+  $("topPicks").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+$("topPrev").addEventListener("click", () => goTopPage(topPage - 1));
+$("topNext").addEventListener("click", () => goTopPage(topPage + 1));
 function setTopOpen(open) {
   $("topPicksPanel").hidden = !open;
   $("topPicks").classList.toggle("collapsed", !open);
