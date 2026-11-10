@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Learn LEAPS: A Plain-English Guide</title>
+<meta name="description" content="A short, plain-English guide to the LEAPS call strategy: what LEAPS are, how to pick one, when to take profit, cut or roll, the risks, videos and reference links.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232f55c9'/%3E%3Cpath d='M7 22l6-7 5 4 7-9' stroke='white' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Source+Sans+3:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="styles.css">
+<style>
+/* Guide page: one readable column with a sticky contents list on wide screens. */
+.learn-wrap { max-width: 1120px; }
+.learn-grid { display: grid; gap: 24px; }
+.toc { display: none; }
+.article { display: grid; gap: 22px; min-width: 0; }
+.article section { display: grid; gap: 10px; scroll-margin-top: 16px; }
+.article h2 { font-size: 1.45rem; }
+.article h3 { font-size: 1.05rem; }
+.article p, .article li { max-width: 70ch; line-height: 1.6; }
+.article ul, .article ol { margin: 0; padding-left: 1.3em; display: grid; gap: 6px; }
+.article p { margin: 0; }
+.callout { border-left: 4px solid var(--accent); background: var(--accent-soft); padding: 12px 14px; border-radius: 0 8px 8px 0; max-width: 70ch; }
+.example { width: 100%; min-width: 0; max-width: 640px; }
+.example td, .example th { white-space: normal; }
+.videos { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
+.video { display: grid; gap: 6px; }
+.video button { position: relative; padding: 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; aspect-ratio: 16 / 9; background: #000; cursor: pointer; }
+.video button img { width: 100%; height: 100%; object-fit: cover; display: block; opacity: .9; }
+.video button span { position: absolute; inset: 0; display: grid; place-items: center; }
+.video button span::before { content: ""; width: 64px; height: 44px; border-radius: 12px; background: rgb(0 0 0 / .7); }
+.video button span::after { content: ""; position: absolute; border-left: 18px solid #fff; border-top: 11px solid transparent; border-bottom: 11px solid transparent; margin-left: 4px; }
+.video iframe { width: 100%; aspect-ratio: 16 / 9; border: 0; border-radius: 10px; }
+.video .who { font-size: .85rem; color: var(--muted); }
+.refs { list-style: none; padding: 0 !important; }
+.refs li { display: grid; gap: 2px; }
+.refs a { color: var(--accent); font-weight: 600; }
+.refs span { color: var(--muted); font-size: .92rem; }
+.back { color: var(--accent); font-weight: 600; text-decoration: none; }
+.glossary { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 0; max-width: 70ch; }
+.glossary dt { font-weight: 600; }
+.glossary dd { margin: 0; color: var(--muted); }
+@media (max-width: 560px) { .glossary { grid-template-columns: 1fr; gap: 2px; } .glossary dd { margin-bottom: 8px; } }
+@media (min-width: 980px) {
+  .learn-grid { grid-template-columns: 220px minmax(0, 1fr); align-items: start; }
+  .toc { display: grid; gap: 6px; position: sticky; top: 16px; font-size: .92rem; }
+  .toc a { color: var(--muted); text-decoration: none; }
+  .toc a:hover { color: var(--accent); }
+}
+</style>
+</head>
+<body>
+<div class="wrap learn-wrap">
+  <header class="top">
+    <a class="back" href="./">← Back to the LEAPS checker</a>
+    <span class="eyebrow">Learn</span>
+    <h1>LEAPS calls, in plain English</h1>
+    <p class="lede">A ten-minute guide to the strategy the checker scores: what a LEAPS call is, how to pick one, how to manage it, and what can go wrong. Videos and reference links are at the end.</p>
+  </header>
+
+  <div class="learn-grid">
+    <nav class="toc" aria-label="On this page">
+      <a href="#what">What is a LEAPS call?</a>
+      <a href="#why">Why deep in the money?</a>
+      <a href="#example">A worked example</a>
+      <a href="#pick">How to pick one</a>
+      <a href="#manage">Hold, sell or roll</a>
+      <a href="#risks">The risks</a>
+      <a href="#words">Words to know</a>
+      <a href="#videos">Videos</a>
+      <a href="#refs">Reference links</a>
+    </nav>
+
+    <article class="article">
+      <section id="what">
+        <h2>What is a LEAPS call?</h2>
+        <p>LEAPS stands for Long-term Equity AnticiPation Securities. They are ordinary listed options with a long life: more than a year, and up to about three years, to expiry.</p>
+        <p>A <strong>call</strong> gives you the right, but not the duty, to buy 100 shares at a fixed price (the <strong>strike</strong>) until the expiry date. One contract covers 100 shares, so a call quoted at $28.00 costs $2,800.</p>
+        <p>The LEAPS call strategy uses one as a cheaper stand-in for owning the shares. You get most of the stock's moves for a fraction of the money, and the most you can lose is what you paid.</p>
+      </section>
+
+      <section id="why">
+        <h2>Why deep in the money?</h2>
+        <p>The checker looks for calls with a strike well <em>below</em> today's price ("in the money"), with a <strong>delta</strong> of about 0.75 to 0.85. Delta is roughly how much the option moves when the stock moves $1. At 0.80, a $1 rise in the stock adds about $0.80 to the call.</p>
+        <ul>
+          <li><strong>It behaves more like the stock.</strong> A high-delta call follows the shares closely. A cheap, far out-of-the-money call needs a big move just to break even.</li>
+          <li><strong>Less paid for time.</strong> Most of a deep in-the-money call's price is real value (the stock price minus the strike). The rest, the <strong>time value</strong>, shrinks to zero by expiry. A smaller share of time value means less to lose to decay.</li>
+          <li><strong>Long expiry, slow decay.</strong> Time value melts slowly at first and fast in the last months. Buying 12 to 24 months out, and selling or rolling about 9 months before expiry, keeps you out of the fast part.</li>
+        </ul>
+      </section>
+
+      <section id="example">
+        <h2>A worked example</h2>
+        <p>Say a stock trades at $100. You could buy 100 shares for $10,000, or buy one call with a $75 strike, 18 months out, for $28 a share ($2,800).</p>
+        <div class="tbl-wrap">
+          <table class="example">
+            <thead><tr><th>If the stock in a year is…</th><th>100 shares</th><th>One $75 call</th></tr></thead>
+            <tbody>
+              <tr><td>$120 (+20%)</td><td>+$2,000 (+20%)</td><td>Worth about $47: +$1,900 (+68%)</td></tr>
+              <tr><td>$100 (flat)</td><td>$0</td><td>Worth about $27: −$100 (−4%), the time value lost</td></tr>
+              <tr><td>$80 (−20%)</td><td>−$2,000 (−20%)</td><td>Worth about $10: −$1,800 (−64%)</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>The call ties up $2,800 instead of $10,000 and earns a bigger percentage when the stock rises. It also loses a bigger percentage when the stock falls, and the whole $2,800 can be lost. The <strong>break-even</strong> at expiry is the strike plus what you paid: $75 + $28 = $103. (Figures are rounded and assume nothing else changes, such as volatility.)</p>
+        <p class="callout">A common rule: keep any one LEAPS position to 2 to 5% of your portfolio, so a total loss is a setback, not a disaster.</p>
+      </section>
+
+      <section id="pick">
+        <h2>How to pick one: the eight checks</h2>
+        <p>These are the rules the checker scores on every analysis.</p>
+        <ol>
+          <li><strong>Time:</strong> 12 to 24+ months to expiry, so you have time to be right and decay stays slow.</li>
+          <li><strong>Delta:</strong> about 0.75 to 0.85: deep enough to act like the stock, without paying for strikes far below the price.</li>
+          <li><strong>Break-even:</strong> close to today's price, so the stock doesn't need a big move just to get your money back.</li>
+          <li><strong>Time value and volatility:</strong> pay little for time, and avoid buying when implied volatility is unusually high, because options are expensive then.</li>
+          <li><strong>A tight market:</strong> a small gap between bid and ask, and plenty of open contracts, so you can get in and out at a fair price.</li>
+          <li><strong>The stock itself:</strong> a business you'd be happy to own, in an uptrend or with a clear bottom.</li>
+          <li><strong>Position size:</strong> 2 to 5% of your portfolio.</li>
+          <li><strong>An exit plan, set before you buy:</strong> see the next section.</li>
+        </ol>
+        <p>Not sure where to start? The <a class="back" href="./#topPicks">Today's top LEAPS picks</a> list on the checker ranks the stocks and ETFs that pass these checks right now.</p>
+      </section>
+
+      <section id="manage">
+        <h2>Hold, sell or roll</h2>
+        <p>The checker's exit plan, which the "Check a call you own" box also uses:</p>
+        <ul>
+          <li><strong>Take profit</strong> at +50% (part of the position) to +100% (the whole thing).</li>
+          <li><strong>Cut the loss</strong> at about −40%, especially if the reason you bought (often the stock's uptrend) has broken.</li>
+          <li><strong>Sell or roll about 9 months before expiry</strong>, before time decay speeds up.</li>
+          <li><strong>Earnings and big news</strong> can move a stock sharply overnight. Know the dates before you buy.</li>
+        </ul>
+        <h3>What "rolling" means</h3>
+        <p>Rolling is two trades: sell the call you own and buy a later one, often at a higher strike. You keep your stake in the stock without riding an old call into its fast-decay months. Rolling up to a higher strike after a big gain also takes money off the table.</p>
+      </section>
+
+      <section id="risks">
+        <h2>The risks</h2>
+        <ul>
+          <li><strong>You can lose everything you paid.</strong> If the stock is below the strike at expiry, the call expires worthless.</li>
+          <li><strong>Leverage cuts both ways.</strong> A 20% drop in the stock can mean a 50% or larger drop in the call.</li>
+          <li><strong>Time works against you.</strong> Even a flat stock costs you the time value.</li>
+          <li><strong>Volatility matters.</strong> If implied volatility falls after you buy, the call can lose value even if the stock doesn't move.</li>
+          <li><strong>No dividends.</strong> Call holders don't receive the stock's dividends, and the share price usually drops by the dividend on the ex-dividend date.</li>
+          <li><strong>Wide spreads cost money.</strong> Use limit orders near the middle of the bid and ask, never market orders.</li>
+        </ul>
+        <p class="callout">Before trading options in the US, your broker must give you the official risk booklet, <em>Characteristics and Risks of Standardized Options</em> (linked below). It's worth reading.</p>
+      </section>
+
+      <section id="words">
+        <h2>Words to know</h2>
+        <dl class="glossary">
+          <dt>Strike</dt><dd>The price at which the call lets you buy the shares.</dd>
+          <dt>Expiry</dt><dd>The last day the option exists.</dd>
+          <dt>Premium</dt><dd>The price of the option, quoted per share (× 100 per contract).</dd>
+          <dt>In the money</dt><dd>For a call, a strike below the stock price.</dd>
+          <dt>Intrinsic value</dt><dd>Stock price minus strike: what the call would be worth if it expired today.</dd>
+          <dt>Time value</dt><dd>The rest of the premium. It shrinks to zero by expiry.</dd>
+          <dt>Delta</dt><dd>About how much the option moves for a $1 move in the stock.</dd>
+          <dt>Theta</dt><dd>About how much value the option loses each day from time decay.</dd>
+          <dt>Implied volatility (IV)</dt><dd>How much movement the option price assumes. High IV means expensive options.</dd>
+          <dt>Open interest</dt><dd>How many contracts are open. More means an easier market to trade.</dd>
+          <dt>Roll</dt><dd>Sell your option and buy a later one in its place.</dd>
+        </dl>
+      </section>
+
+      <section id="videos">
+        <h2>Videos</h2>
+        <p>Short videos from the Options Industry Council (the industry's free education body) and a bank brokerage. Tap one to play it here.</p>
+        <div class="videos" id="videoList"></div>
+      </section>
+
+      <section id="refs">
+        <h2>Reference links</h2>
+        <ul class="refs">
+          <li><a href="https://www.optionseducation.org/optionsoverview/leaps-overview" target="_blank" rel="noopener">LEAPS: Options for the Long Term</a><span>Options Industry Council. What LEAPS are and how they're used.</span></li>
+          <li><a href="https://www.optionseducation.org/optionsoverview/how-leaps-work" target="_blank" rel="noopener">How LEAPS Work</a><span>Options Industry Council. Expiry cycles and pricing basics.</span></li>
+          <li><a href="https://www.optionseducation.org/optionsoverview/leaps-time-erosion-versus-delta-effect" target="_blank" rel="noopener">Time Erosion vs. Delta Effect</a><span>Options Industry Council. Why long-dated calls decay slowly.</span></li>
+          <li><a href="https://www.optionseducation.org/optionsoverview/leaps-strategies" target="_blank" rel="noopener">LEAPS Strategies</a><span>Options Industry Council. Stock replacement and other uses.</span></li>
+          <li><a href="https://www.finra.org/investors/insights/options-z-basics-greeks" target="_blank" rel="noopener">Options A to Z: the Basics and the Greeks</a><span>FINRA. Delta, theta and the other Greeks, for beginners.</span></li>
+          <li><a href="https://www.investor.gov/introduction-investing/general-resources/news-alerts/alerts-bulletins/investor-bulletins-63" target="_blank" rel="noopener">An Introduction to Options</a><span>U.S. SEC investor bulletin.</span></li>
+          <li><a href="https://www.theocc.com/company-information/documents-and-archives/options-disclosure-document" target="_blank" rel="noopener">Characteristics and Risks of Standardized Options</a><span>The Options Clearing Corporation. The official risk disclosure.</span></li>
+          <li><a href="https://www.cboe.com/tradable_products/equity_indices/leaps_options/" target="_blank" rel="noopener">LEAPS Options</a><span>Cboe, the exchange that created LEAPS.</span></li>
+          <li><a href="https://en.wikipedia.org/wiki/LEAPS_(finance)" target="_blank" rel="noopener">LEAPS (finance)</a><span>Wikipedia overview and history.</span></li>
+        </ul>
+      </section>
+
+      <p class="caveat" role="note"><strong>For education only. Not financial advice.</strong> This guide explains how the strategy works. It isn't a recommendation to buy or sell anything. Options carry real risk, including losing everything you paid. <a href="./#disclosures">Full disclosures</a></p>
+    </article>
+  </div>
+</div>
+<script>
+// Videos load only when tapped (privacy-enhanced YouTube embed), so the page stays fast.
+const VIDEOS = [
+  ["zkZhrchheqM", "LEAPS Options Explained: Long Term Options Strategies", "The Options Industry Council"],
+  ["G--pPY7smFA", "LEAPS: Long Term Options Explained", "The Options Industry Council"],
+  ["XLwqOPjMTSo", "Option Greeks explained: Delta", "TD Direct Investing"],
+  ["QEmtr5ZV-SY", "Option Greeks explained: Theta", "TD Direct Investing"],
+];
+const list = document.getElementById("videoList");
+for (const [id, title, who] of VIDEOS) {
+  const fig = document.createElement("figure");
+  fig.className = "video";
+  fig.style.margin = "0";
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.setAttribute("aria-label", "Play: " + title);
+  const img = document.createElement("img");
+  img.src = `https://i.ytimg.com/vi/${id}/hqdefault.jpg`;
+  img.alt = "";
+  img.loading = "lazy";
+  btn.append(img, document.createElement("span"));
+  btn.addEventListener("click", () => {
+    const f = document.createElement("iframe");
+    f.src = `https://www.youtube-nocookie.com/embed/${id}?autoplay=1&rel=0`;
+    f.title = title;
+    f.allow = "autoplay; encrypted-media; picture-in-picture; fullscreen";
+    f.allowFullscreen = true;
+    btn.replaceWith(f);
+  });
+  const cap = document.createElement("figcaption");
+  const t = document.createElement("strong");
+  t.textContent = title;
+  const w = document.createElement("div");
+  w.className = "who";
+  w.textContent = who;
+  cap.append(t, w);
+  fig.append(btn, cap);
+  list.append(fig);
+}
+</script>
+</body>
+</html>

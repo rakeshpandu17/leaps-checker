@@ -253,6 +253,16 @@ th { font: 600 .7rem var(--mono); letter-spacing: .06em; text-transform: upperca
 td { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 .notes { color: var(--muted); font-size: .88rem; }
 .caveat a { color: var(--accent); font-weight: 600; }
+/* Ways into the Learn page: a link under the title and a card above the disclosures. */
+.learn-link { margin: 0; }
+.learn-link a { color: var(--accent); font-weight: 600; text-decoration: none; }
+.learn-link a:hover { text-decoration: underline; }
+.learn-card { gap: 14px; }
+.learn-card > div { display: grid; gap: 6px; }
+.learn-links { display: flex; flex-wrap: wrap; gap: 8px; }
+.learn-links a { padding: 7px 12px; border: 1px solid var(--line); border-radius: 999px; color: var(--ink); text-decoration: none; font-size: .92rem; background: var(--bg); }
+.learn-links a:hover { border-color: var(--accent); color: var(--accent); }
+.learn-go { justify-self: start; padding: 9px 16px; border-radius: 6px; background: var(--accent); color: var(--on-accent); font-weight: 600; text-decoration: none; }
 .disclosures { display: grid; gap: 10px; }
 .disclosures h2 { font-size: 1.1rem; color: var(--ink); }
 .disclosures ul { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; }
@@ -267,7 +277,7 @@ td { font-family: var(--mono); font-variant-numeric: tabular-nums; }
   .wrap { max-width: 1440px; padding-left: max(32px, env(safe-area-inset-left, 0px)); padding-right: max(32px, env(safe-area-inset-right, 0px)); }
   .top { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); column-gap: 32px; align-items: start; }
   .top > :not(.caveat) { grid-column: 1; }
-  .top .caveat { grid-column: 2; grid-row: 1 / span 3; align-self: center; }
+  .top .caveat { grid-column: 2; grid-row: 1 / span 4; align-self: center; }
   #result { grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: start; }
   #result > .grid2 { display: contents; }
   #result > :not(.grid2):not(#verdict) { grid-column: 1 / -1; }
