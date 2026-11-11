@@ -82,6 +82,14 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .mood .up { color: var(--pass); } .mood .down { color: var(--fail); }
 .mood .sect { color: var(--muted); }
 .top-tbl { min-width: 860px; }
+/* Sortable headings: the whole heading is a button; an arrow marks the sorted column. */
+.top-tbl th { padding: 0; }
+.top-tbl th button.sort { all: unset; box-sizing: border-box; display: block; width: 100%; padding: 7px 9px; cursor: pointer; text-align: inherit; font: inherit; letter-spacing: inherit; text-transform: inherit; color: inherit; white-space: nowrap; }
+.top-tbl th button.sort:hover, .top-tbl th button.sort:focus-visible { color: var(--accent); outline: none; }
+.top-tbl th button.sort::after { content: "↕"; margin-left: 4px; opacity: .35; font-family: var(--body); }
+.top-tbl th[aria-sort="ascending"] button.sort::after { content: "▲"; opacity: 1; color: var(--accent); }
+.top-tbl th[aria-sort="descending"] button.sort::after { content: "▼"; opacity: 1; color: var(--accent); }
+.top-tbl th[aria-sort="ascending"], .top-tbl th[aria-sort="descending"] { color: var(--accent); }
 .pager { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 .pager button:disabled { opacity: .45; cursor: default; }
 .pager .sub { text-align: center; flex: 1 1 auto; }

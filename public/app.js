@@ -1149,6 +1149,41 @@ $("ownDialog").addEventListener("click", (e) => { if (e.target === $("ownDialog"
 // minutes while the page is open, so a new scan shows up without a page reload.
 const TOP_PAGE = 10; // picks per page
 let topList = [], topPage = 0, topWhen = "";
+// Sorting: click a column heading to sort the whole list by it; click again to reverse. "#" keeps each
+// pick's score rank, so you can still see where it placed overall.
+let topSort = { key: "rank", dir: 1 };
+const TAG_W = { pass: 1, warn: -0.5, fail: -1, info: 0 };
+const TOP_KEYS = {
+  rank: (p) => p.rank,
+  ticker: (p) => p.t,
+  score: (p) => p.score,
+  why: (p) => p.why.reduce((s, [, c]) => s + (TAG_W[c] ?? 0), 0) * 100 + p.score / 100,
+  verdict: (p) => (p.a.verdict.level === "go" ? 0 : 1) * 1000 - p.score,
+  contract: (p) => `${p.a.best.expiry} ${String(p.a.best.strike.toFixed(2)).padStart(10, "0")}`,
+  cost: (p) => p.a.best.mid,
+  delta: (p) => p.a.best.delta,
+  be: (p) => p.a.best.breakevenPct,
+};
+// The first click on a column sorts the most useful way: best scores, cheapest cost, nearest break-even first.
+const TOP_FIRST_DIR = { rank: 1, ticker: 1, score: -1, why: -1, verdict: 1, contract: 1, cost: 1, delta: -1, be: 1 };
+function sortedTop() {
+  const f = TOP_KEYS[topSort.key], d = topSort.dir;
+  return topList.slice().sort((x, y) => {
+    const a = f(x), b = f(y);
+    const c = typeof a === "string" ? a.localeCompare(b) : (a ?? Infinity) - (b ?? Infinity);
+    return c * d || x.rank - y.rank;
+  });
+}
+function setTopSort(key) {
+  topSort = topSort.key === key ? { key, dir: -topSort.dir } : { key, dir: TOP_FIRST_DIR[key] || 1 };
+  document.querySelectorAll("#topHead th").forEach((th) => {
+    const k = th.querySelector("button").dataset.sort;
+    th.setAttribute("aria-sort", k === topSort.key ? (topSort.dir > 0 ? "ascending" : "descending") : "none");
+  });
+  topPage = 0;
+  renderTopPage();
+}
+$("topHead").addEventListener("click", (e) => { const b = e.target.closest("button.sort"); if (b) setTopSort(b.dataset.sort); });
 const MOOD = { up: ["Uptrend", "up"], down: ["Downtrend", "down"], mixed: ["Mixed", ""], unknown: ["Unknown", ""] };
 let topRun = 0;
 async function showTopPicks(force = false) {
@@ -1175,6 +1210,7 @@ async function showTopPicks(force = false) {
   if (mood.state === "down") m.append(el("span", { class: "down" }, "The market is in a downtrend: LEAPS calls carry more risk now, so size small."));
 
   // A refresh keeps the page you're on when it still exists.
+  picks.forEach((p, i) => { p.rank = i + 1; });
   topList = picks;
   topWhen = when;
   topPage = Math.min(topPage, Math.max(0, Math.ceil(picks.length / TOP_PAGE) - 1));
@@ -1185,15 +1221,14 @@ function renderTopPage() {
   const tb = $("topPicksBody");
   tb.replaceChildren();
   const from = topPage * TOP_PAGE, when = topWhen;
-  topList.slice(from, from + TOP_PAGE).forEach((p, j) => {
-    const i = from + j;
+  sortedTop().slice(from, from + TOP_PAGE).forEach((p) => {
     const b = p.a.best, name = p.d.fundamentals?.name || NAMES[p.t] || "";
     ideaInfo.set(p.t, { t: p.t, when, level: p.a.verdict.level, symbol: b.symbol, contract: `${fmtDate(b.expiry)} $${b.strike}`,
       bid: b.bid, ask: b.ask, spread: b.spreadPct, oi: b.oi });
     const bar = el("span");
     bar.style.width = p.score + "%";
     tb.append(el("tr", { "data-t": p.t, tabindex: "0", title: `Open the full ${p.t} check` },
-      el("td", {}, String(i + 1)),
+      el("td", {}, String(p.rank)),
       el("td", { class: "tk" }, p.t, name ? el("small", {}, name) : null),
       el("td", {}, el("span", { class: "score" }, String(p.score), el("span", { class: "meter" }, bar))),
       el("td", { class: "why" }, ...(p.why.length ? p.why.map(([txt, cls]) => el("span", { class: "pill " + cls }, txt)) : ["Balanced"])),
